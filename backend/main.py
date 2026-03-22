@@ -1,9 +1,16 @@
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 from config import settings
+from utils.logger import setup_logging, get_logger
 from api.auth import router as auth_router
+from api.monitoring import router as monitoring_router
 from api.websocket import websocket_endpoint
+
+# Setup logging before app initialization
+setup_logging()
+logger = get_logger(__name__)
 
 app = FastAPI(title="SeeWorldWeb Backend", version="1.0.0")
 
@@ -19,15 +26,28 @@ app.add_middleware(
 
 # Register routes
 app.include_router(auth_router)
+app.include_router(monitoring_router)
 app.add_api_websocket_route("/ws", websocket_endpoint)
+
+# Add Prometheus instrumentation
+Instrumentator().instrument(app).expose(app)
+
+logger.info("Application started", routes=["/", "/health", "/metrics", "/auth/*", "/ws"])
 
 
 @app.get("/")
 async def root():
+    logger.debug("Root endpoint called")
     return {"status": "ok", "service": "SeeWorldWeb", "version": "1.0.0"}
 
 
 if __name__ == "__main__":
+    logger.info(
+        "Starting Uvicorn server",
+        host=settings.host,
+        port=settings.port,
+        debug=settings.debug
+    )
     uvicorn.run(
         "main:app",
         host=settings.host,

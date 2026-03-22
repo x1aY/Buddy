@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     # Server
     port: int = 8000
     host: str = "0.0.0.0"
+    debug: bool = True
 
     # CORS
     cors_allow_origins: str = "http://localhost:5173,http://localhost:3000"
