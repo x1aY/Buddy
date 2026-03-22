@@ -9,12 +9,15 @@ from structlog.processors import add_log_level, TimeStamper, JSONRenderer
 
 from config import settings
 
+# Base directory is backend/
+BASE_DIR = Path(__file__).parent.parent
+
 
 def setup_logging() -> None:
     """Set up structured logging configuration."""
 
-    # Create logs directory if it doesn't exist
-    logs_dir = Path(__file__).parent.parent.parent / "logs"
+    # Create logs directory if it doesn't exist - logs/ at project root
+    logs_dir = BASE_DIR.parent / "logs"
     logs_dir.mkdir(exist_ok=True)
 
     # Determine log level

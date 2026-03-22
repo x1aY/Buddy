@@ -2,6 +2,9 @@ from pydantic_settings import BaseSettings
 from typing import Optional
 
 
+__version__ = "1.0.0"
+
+
 class Settings(BaseSettings):
     # Server
     port: int = 8000

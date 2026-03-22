@@ -3,6 +3,9 @@ from typing import Optional
 from config import settings
 from models.schemas import UserInfo
 
+# Shared httpx client reused across requests
+_client = httpx.AsyncClient(timeout=30)
+
 
 class WeChatOAuthService:
     OAUTH_URL = "https://open.weixin.qq.com/connect/qrconnect"
@@ -25,13 +28,12 @@ class WeChatOAuthService:
             "grant_type": "authorization_code"
         }
 
-        async with httpx.AsyncClient() as client:
-            response = await client.get(cls.TOKEN_URL, params=params)
-            if response.status_code != 200:
-                return None
+        response = await _client.get(cls.TOKEN_URL, params=params)
+        if response.status_code != 200:
+            return None
 
-            result = response.json()
-            return result.get("access_token")
+        result = response.json()
+        return result.get("access_token")
 
     @classmethod
     async def get_user_info(cls, access_token: str, openid: str) -> Optional[UserInfo]:
@@ -41,18 +43,17 @@ class WeChatOAuthService:
             "lang": "zh_CN"
         }
 
-        async with httpx.AsyncClient() as client:
-            response = await client.get(cls.USER_INFO_URL, params=params)
-            if response.status_code != 200:
-                return None
+        response = await _client.get(cls.USER_INFO_URL, params=params)
+        if response.status_code != 200:
+            return None
 
-            result = response.json()
-            if result.get("errcode"):
-                return None
+        result = response.json()
+        if result.get("errcode"):
+            return None
 
-            return UserInfo(
-                id=result.get("openid", ""),
-                name=result.get("nickname", "WeChat User"),
-                avatar=result.get("headimgurl", ""),
-                provider="wechat"
-            )
+        return UserInfo(
+            id=result.get("openid", ""),
+            name=result.get("nickname", "WeChat User"),
+            avatar=result.get("headimgurl", ""),
+            provider="wechat"
+        )

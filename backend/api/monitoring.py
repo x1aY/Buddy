@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 from pydantic import BaseModel
+from config import __version__
 
 router = APIRouter(prefix="", tags=["monitoring"])
 
@@ -23,5 +24,5 @@ async def health_check():
     return HealthResponse(
         status="ok",
         service="SeeWorldWeb",
-        version="1.0.0"
+        version=__version__
     )

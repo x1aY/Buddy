@@ -1,7 +1,10 @@
 import httpx
-from typing import Optional, Tuple
+from typing import Optional
 from config import settings
 from models.schemas import UserInfo
+
+# Shared httpx client reused across requests
+_client = httpx.AsyncClient(timeout=30)
 
 
 class HuaweiOAuthService:
@@ -26,31 +29,29 @@ class HuaweiOAuthService:
             "redirect_uri": settings.huawei_redirect_uri
         }
 
-        async with httpx.AsyncClient() as client:
-            response = await client.post(cls.TOKEN_URL, data=data)
-            if response.status_code != 200:
-                return None
+        response = await _client.post(cls.TOKEN_URL, data=data)
+        if response.status_code != 200:
+            return None
 
-            result = response.json()
-            return result.get("access_token")
+        result = response.json()
+        return result.get("access_token")
 
     @classmethod
     async def get_user_info(cls, access_token: str) -> Optional[UserInfo]:
         headers = {"Authorization": f"Bearer {access_token}"}
 
-        async with httpx.AsyncClient() as client:
-            response = await client.get(cls.USER_INFO_URL, headers=headers)
-            if response.status_code != 200:
-                return None
+        response = await _client.get(cls.USER_INFO_URL, headers=headers)
+        if response.status_code != 200:
+            return None
 
-            result = response.json()
-            if result.get("retCode") != 0:
-                return None
+        result = response.json()
+        if result.get("retCode") != 0:
+            return None
 
-            profile = result.get("profile", {})
-            return UserInfo(
-                id=str(profile.get("openId", "")),
-                name=profile.get("displayName", "Huawei User"),
-                avatar=profile.get("avatar", ""),
-                provider="huawei"
-            )
+        profile = result.get("profile", {})
+        return UserInfo(
+            id=str(profile.get("openId", "")),
+            name=profile.get("displayName", "Huawei User"),
+            avatar=profile.get("avatar", ""),
+            provider="huawei"
+        )

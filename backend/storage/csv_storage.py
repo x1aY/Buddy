@@ -1,10 +1,8 @@
 """Base CSV storage class for simple file-based persistence."""
 
 import csv
-import os
-from datetime import datetime
 from pathlib import Path
-from typing import List, Generic, TypeVar, Optional, Callable
+from typing import List, Generic, TypeVar, Callable
 
 T = TypeVar('T')
 
@@ -36,7 +34,7 @@ class CSVStorage(Generic[T]):
         self.dict_to_row = dict_to_row
 
         # Create parent directory if it doesn't exist
-        self.file_path.parent.mkdir(parents=True exist_ok=True)
+        self.file_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Create file with headers if it doesn't exist
         if not self.file_path.exists():
@@ -48,29 +46,26 @@ class CSVStorage(Generic[T]):
             writer = csv.DictWriter(f, fieldnames=self.headers)
             writer.writeheader()
 
-    def _ensure_file_exists(self) -> None:
-        """Ensure the file exists, create it if not."""
-        if not self.file_path.exists():
-            self._create_file()
-
     def load_all(self) -> List[T]:
         """Load all rows from the CSV file.
 
         Returns:
             List of domain objects
         """
-        self._ensure_file_exists()
-
         items: List[T] = []
-        with open(self.file_path, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                try:
-                    item = self.dict_to_row(row)
-                    items.append(item)
-                except Exception:
-                    # Skip malformed rows
-                    continue
+        try:
+            with open(self.file_path, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    try:
+                        item = self.dict_to_row(row)
+                        items.append(item)
+                    except Exception:
+                        # Skip malformed rows
+                        continue
+        except FileNotFoundError:
+            # File doesn't exist yet, return empty list
+            pass
         return items
 
     def append(self, item: T) -> None:
@@ -79,12 +74,17 @@ class CSVStorage(Generic[T]):
         Args:
             item: The item to append
         """
-        self._ensure_file_exists()
-
         row_dict = self.row_to_dict(item)
-        with open(self.file_path, 'a', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=self.headers)
-            writer.writerow(row_dict)
+        try:
+            with open(self.file_path, 'a', newline='', encoding='utf-8') as f:
+                writer = csv.DictWriter(f, fieldnames=self.headers)
+                writer.writerow(row_dict)
+        except FileNotFoundError:
+            # File doesn't exist, create it first
+            self._create_file()
+            with open(self.file_path, 'a', newline='', encoding='utf-8') as f:
+                writer = csv.DictWriter(f, fieldnames=self.headers)
+                writer.writerow(row_dict)
 
     def filter(self, predicate: Callable[[T], bool]) -> List[T]:
         """Filter items by predicate.
@@ -108,7 +108,8 @@ class CSVStorage(Generic[T]):
         Returns:
             Number of data rows (excluding header)
         """
-        if not self.file_path.exists():
+        try:
+            with open(self.file_path, 'r') as f:
+                return max(0, sum(1 for _ in f) - 1)
+        except FileNotFoundError:
             return 0
-        with open(self.file_path, 'r') as f:
-            return max(0, sum(1 for _ in f) - 1)

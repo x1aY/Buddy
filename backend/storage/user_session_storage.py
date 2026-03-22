@@ -3,12 +3,15 @@
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 from .csv_storage import CSVStorage
 
 # Project root / backend/data/
 DATA_DIR = Path(__file__).parent.parent / "data"
+
+
+ProviderType = Literal['huawei', 'wechat']
 
 
 @dataclass
@@ -18,7 +21,7 @@ class UserSession:
     user_id: str
     username: str
     display_name: str
-    provider: str  # 'huawei' or 'wechat'
+    provider: ProviderType
     login_time: str
     expires_at: str
     ip_address: Optional[str]
@@ -52,22 +55,30 @@ def dict_to_user_session(row: dict) -> UserSession:
     )
 
 
-# Create the user session storage instance
-user_session_storage = CSVStorage[UserSession](
-    file_path=DATA_DIR / "user_sessions.csv",
-    headers=[
-        'session_id',
-        'user_id',
-        'username',
-        'display_name',
-        'provider',
-        'login_time',
-        'expires_at',
-        'ip_address',
-    ],
-    row_to_dict=user_session_to_dict,
-    dict_to_row=dict_to_user_session
-)
+# Lazy initialized storage instance
+_user_session_storage: CSVStorage[UserSession] | None = None
+
+
+def _get_storage() -> CSVStorage[UserSession]:
+    """Get or create the storage instance (lazy initialization)."""
+    global _user_session_storage
+    if _user_session_storage is None:
+        _user_session_storage = CSVStorage[UserSession](
+            file_path=DATA_DIR / "user_sessions.csv",
+            headers=[
+                'session_id',
+                'user_id',
+                'username',
+                'display_name',
+                'provider',
+                'login_time',
+                'expires_at',
+                'ip_address',
+            ],
+            row_to_dict=user_session_to_dict,
+            dict_to_row=dict_to_user_session
+        )
+    return _user_session_storage
 
 
 def add_user_session(
@@ -75,7 +86,7 @@ def add_user_session(
     user_id: str,
     username: str,
     display_name: str,
-    provider: str,
+    provider: ProviderType,
     login_time: datetime,
     expires_at: datetime,
     ip_address: Optional[str] = None
@@ -105,7 +116,8 @@ def add_user_session(
         expires_at=expires_at.isoformat(),
         ip_address=ip_address
     )
-    user_session_storage.append(session)
+    storage = _get_storage()
+    storage.append(session)
     return session
 
 
@@ -115,7 +127,8 @@ def get_all_sessions() -> List[UserSession]:
     Returns:
         List of all user sessions
     """
-    return user_session_storage.load_all()
+    storage = _get_storage()
+    return storage.load_all()
 
 
 def count_sessions() -> int:
@@ -124,4 +137,5 @@ def count_sessions() -> int:
     Returns:
         Total count of sessions
     """
-    return user_session_storage.count()
+    storage = _get_storage()
+    return storage.count()

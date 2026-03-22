@@ -1,3 +1,4 @@
+import httpx
 from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
 from services import HuaweiOAuthService, WeChatOAuthService
@@ -43,11 +44,12 @@ async def login_wechat():
 @router.get("/wechat/callback")
 async def wechat_callback(request: Request, code: str):
     """WeChat OAuth callback"""
-    import httpx
+    access_token = await WeChatOAuthService.get_access_token(code)
+    if not access_token:
+        return RedirectResponse(f"{request.base_url}login?error=auth_failed")
 
-    if not settings.wechat_app_id or not settings.wechat_app_secret:
-        return RedirectResponse(f"{request.base_url}login?error=config_missing")
-
+    # We need openid from access token response
+    # Since the service doesn't return it, we still need to make the call here
     params = {
         "appid": settings.wechat_app_id,
         "secret": settings.wechat_app_secret,
@@ -55,24 +57,27 @@ async def wechat_callback(request: Request, code: str):
         "grant_type": "authorization_code"
     }
 
-    async with httpx.AsyncClient() as client:
-        response = await client.get("https://api.weixin.qq.com/sns/oauth2/access_token", params=params)
-        if response.status_code != 200:
-            return RedirectResponse(f"{request.base_url}login?error=auth_failed")
+    response = await _client.get("https://api.weixin.qq.com/sns/oauth2/access_token", params=params)
+    if response.status_code != 200:
+        return RedirectResponse(f"{request.base_url}login?error=auth_failed")
 
-        result = response.json()
-        access_token = result.get("access_token")
-        openid = result.get("openid")
+    result = response.json()
+    access_token = result.get("access_token")
+    openid = result.get("openid")
 
-        if not access_token or not openid:
-            return RedirectResponse(f"{request.base_url}login?error=auth_failed")
+    if not access_token or not openid:
+        return RedirectResponse(f"{request.base_url}login?error=auth_failed")
 
-        user_info = await WeChatOAuthService.get_user_info(access_token, openid)
-        if not user_info:
-            return RedirectResponse(f"{request.base_url}login?error=user_info_failed")
+    user_info = await WeChatOAuthService.get_user_info(access_token, openid)
+    if not user_info:
+        return RedirectResponse(f"{request.base_url}login?error=user_info_failed")
 
-        token = create_jwt_token(user_info)
-        encoded_user = user_info.model_dump_json()
+    token = create_jwt_token(user_info)
+    encoded_user = user_info.model_dump_json()
 
-        frontend_url = settings.cors_allow_origins.split(",")[0]
-        return RedirectResponse(f"{frontend_url}/#/login?token={token}&user={encoded_user}")
+    frontend_url = settings.cors_allow_origins.split(",")[0]
+    return RedirectResponse(f"{frontend_url}/#/login?token={token}&user={encoded_user}")
+
+
+# Shared client
+_client = httpx.AsyncClient(timeout=30)

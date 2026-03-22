@@ -4,6 +4,9 @@ from typing import Optional
 from config import settings
 from models.schemas import TTSResult
 
+# Shared httpx client reused across requests
+_client = httpx.AsyncClient(timeout=30)
+
 
 class TTSService:
     """Alibaba Cloud TTS Service"""
@@ -23,9 +26,8 @@ class TTSService:
             "sample_rate": 24000
         }
 
-        async with httpx.AsyncClient() as client:
-            response = await client.post(cls.TTS_URL, data=params, timeout=30)
-            if response.status_code != 200:
-                return TTSResult(audio=b"", success=False)
+        response = await _client.post(cls.TTS_URL, data=params)
+        if response.status_code != 200:
+            return TTSResult(audio=b"", success=False)
 
-            return TTSResult(audio=response.content, success=True)
+        return TTSResult(audio=response.content, success=True)
