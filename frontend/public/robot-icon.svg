@@ -1,0 +1,20 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Head -->
+  <circle cx="100" cy="70" r="45" fill="#e0e0e0" stroke="#bdbdbd" stroke-width="2"/>
+  <!-- Antenna -->
+  <line x1="100" y1="25" x2="100" y2="5" stroke="#bdbdbd" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="100" cy="3" r="4" fill="#757575"/>
+  <!-- Eyes -->
+  <circle cx="80" cy="60" r="8" fill="#424242"/>
+  <circle cx="120" cy="60" r="8" fill="#424242"/>
+  <!-- Smile -->
+  <path d="M 75 90 Q 100 105 125 90" fill="none" stroke="#424242" stroke-width="3" stroke-linecap="round"/>
+  <!-- Body -->
+  <rect x="65" y="120" width="70" height="60" rx="10" fill="#607d8b" stroke="#455a64" stroke-width="2"/>
+  <!-- Arms -->
+  <rect x="40" y="125" width="30" height="10" rx="5" fill="#607d8b" stroke="#455a64" stroke-width="2"/>
+  <rect x="130" y="125" width="30" height="10" rx="5" fill="#607d8b" stroke="#455a64" stroke-width="2"/>
+  <!-- Legs -->
+  <rect x="75" y="180" width="15" height="15" rx="3" fill="#455a64"/>
+  <rect x="110" y="180" width="15" height="15" rx="3" fill="#455a64"/>
+</svg>
