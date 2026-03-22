@@ -6,3 +6,13 @@ pyjwt
 httpx
 python-dotenv
 pydantic-settings
+
+# Testing
+pytest
+pytest-asyncio
+
+# Logging
+structlog
+
+# Monitoring
+prometheus-fastapi-instrumentator
