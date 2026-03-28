@@ -6,6 +6,8 @@ export function useAudioCapture(sendChunk: (base64Audio: string) => void) {
   const isEnabled = ref<boolean>(DEFAULT_AUDIO_ENABLED);
   const mediaRecorder = ref<MediaRecorder | null>(null);
   const stream = ref<MediaStream | null>(null);
+  let audioChunkCounter = 0;
+  const LOG_INTERVAL = 10; // Log every 10 chunks
 
   async function toggle(): Promise<boolean> {
     const newState = !isEnabled.value;
@@ -40,6 +42,10 @@ export function useAudioCapture(sendChunk: (base64Audio: string) => void) {
           reader.onloadend = () => {
             const base64 = (reader.result as string).split(',')[1];
             sendChunk(base64);
+            audioChunkCounter++;
+            if (import.meta.env.DEV && audioChunkCounter % LOG_INTERVAL === 0) {
+              console.log(`[Audio] Sent ${audioChunkCounter} chunks total, last chunk size: ${base64.length} bytes`);
+            }
           };
           reader.readAsDataURL(event.data);
         }

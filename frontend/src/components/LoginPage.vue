@@ -6,16 +6,28 @@
 
       <div class="login-buttons">
         <button class="login-btn huawei" @click="loginWithHuawei">
-          <span class="icon">📱</span>
+          <span class="icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/>
+            </svg>
+          </span>
           华为账号登录
         </button>
         <button class="login-btn wechat" @click="loginWithWechat">
-          <span class="icon">💬</span>
+          <span class="icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4V4c0-1.1-.9-2-2-2z"/>
+            </svg>
+          </span>
           微信账号登录
         </button>
         <div class="divider"></div>
         <button class="login-btn guest" @click="enterAsGuest">
-          <span class="icon">👁️</span>
+          <span class="icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+            </svg>
+          </span>
           游客体验
         </button>
       </div>

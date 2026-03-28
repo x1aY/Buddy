@@ -5,6 +5,7 @@ import {
   CAMERA_FRAME_QUALITY,
   CAMERA_FRAME_MAX_WIDTH
 } from '@seeworldweb/shared/src/constants';
+import { extractBase64FromDataUrl } from '@/utils/image';
 
 export function useCameraCapture(sendFrame: (base64Image: string) => void) {
   const isEnabled = ref<boolean>(DEFAULT_CAMERA_ENABLED);
@@ -90,11 +91,15 @@ export function useCameraCapture(sendFrame: (base64Image: string) => void) {
 
     // Convert to base64 JPEG
     const base64 = canvas.toDataURL('image/jpeg', CAMERA_FRAME_QUALITY);
+    const pureBase64 = extractBase64FromDataUrl(base64);
 
-    // Only send if frame changed (reduces redundant data sending)
+    // Only send changed frames
     if (base64 !== lastSentFrame) {
-      sendFrame(base64);
+      sendFrame(pureBase64);
       lastSentFrame = base64;
+      if (import.meta.env.DEV) {
+        console.log(`[Camera] Sent frame, size: ${pureBase64.length} bytes`);
+      }
     }
   }
 

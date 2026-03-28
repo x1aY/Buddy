@@ -15,7 +15,7 @@
 
       <!-- Center area: robot icon or nothing when subtitle enabled -->
       <div class="center-area flex-center">
-        <div v-if="!subtitleEnabled" class="robot-container">
+        <div v-if="!subtitleEnabled && !cameraEnabled" class="robot-container">
           <img src="/robot-icon.svg" alt="Robot" class="robot-icon" />
           <p v-if="!isConnected" class="connecting-text">连接中...</p>
           <p v-if="isConnected && !audioEnabled" class="hint-text">点击左下角麦克风开始对话</p>
@@ -40,7 +40,10 @@
           @toggle="toggleCamera"
         />
         <button class="logout-btn" @click="handleLogout">
-          🚪 退出登录
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 0.5rem;">
+            <path d="M17 17l5-5-5-5v3H9v4h8v3zm3-13H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2z"/>
+          </svg>
+          退出登录
         </button>
       </div>
     </div>
