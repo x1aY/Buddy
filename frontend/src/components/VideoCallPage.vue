@@ -26,6 +26,7 @@
           v-if="subtitleEnabled"
           :messages="conversationMessages"
           :cameraEnabled="cameraEnabled"
+          :partialText="partialUserTranscript"
         />
       </div>
 
@@ -75,6 +76,7 @@ const token = authStore.token;
 const subtitleEnabled = ref(DEFAULT_SUBTITLE_ENABLED);
 const conversationMessages = ref<ConversationMessage[]>([]);
 const currentModelMessage = ref('');
+const partialUserTranscript = ref('');  // Real-time partial ASR result
 
 // Composables
 const { isConnected, connect, send, onMessage } = useWebSocketClient(token);
@@ -115,13 +117,20 @@ onMounted(() => {
 
 function handleServerMessage(message: ServerMessage) {
   switch (message.type) {
+    case 'user_transcript_partial':
+      // Real-time update of partial user transcript
+      partialUserTranscript.value = message.text;
+      break;
+
     case 'user_transcript':
+      // Final user transcript - add to conversation, clear partial
       conversationMessages.value.push({
         id: Date.now().toString() + '-user',
         role: 'user',
         text: message.text,
         timestamp: Date.now()
       });
+      partialUserTranscript.value = '';
       currentModelMessage.value = '';
       break;
 

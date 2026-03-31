@@ -11,7 +11,8 @@ export type ClientMessage =
 
 // Server -> Client messages
 export type ServerMessage =
-  | { type: 'user_transcript'; text: string } // ASR result for user
+  | { type: 'user_transcript'; text: string } // ASR final result for user
+  | { type: 'user_transcript_partial'; text: string } // Partial ASR result (streaming)
   | { type: 'model_start'; sessionId: string } // Model starts responding
   | { type: 'model_token'; token: string } // Streaming token from model
   | { type: 'model_audio'; data: string } // base64 encoded TTS audio

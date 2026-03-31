@@ -77,6 +77,11 @@ class UserTranscriptMessage(BaseModel):
     text: str
 
 
+class UserTranscriptPartialMessage(BaseModel):
+    type: Literal['user_transcript_partial'] = 'user_transcript_partial'
+    text: str  # 部分识别结果（流式更新）
+
+
 class ModelStartMessage(BaseModel):
     type: Literal['model_start'] = 'model_start'
     sessionId: str
@@ -107,6 +112,7 @@ class ErrorMessage(BaseModel):
 
 ServerMessage = Union[
     UserTranscriptMessage,
+    UserTranscriptPartialMessage,
     ModelStartMessage,
     ModelTokenMessage,
     ModelAudioMessage,

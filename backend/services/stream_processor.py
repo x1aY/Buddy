@@ -9,6 +9,7 @@ from models.schemas import (
     LLMMessage,
     LLMContentPart,
     UserTranscriptMessage,
+    UserTranscriptPartialMessage,
     ModelStartMessage,
     ModelTokenMessage,
     ModelAudioMessage,
@@ -16,10 +17,13 @@ from models.schemas import (
     PongMessage,
     ErrorMessage,
 )
-from services import ASRService, TTSService, DoubaoLLMService, VolcanoCodingService
+from services import TTSService, DoubaoLLMService, VolcanoCodingService
+from services.streaming_asr import StreamingASRService
+from utils.logger import get_logger
+
+logger = get_logger("stream_processor")
 
 # Singleton service instances - stateless, can be reused across connections
-_asr_service = ASRService()
 _tts_service = TTSService()
 _doubao_llm = DoubaoLLMService()
 _volcano_coding = VolcanoCodingService()
@@ -28,9 +32,10 @@ _volcano_coding = VolcanoCodingService()
 class StreamProcessor:
     """Process incoming media stream and handle conversation"""
 
+    # Silence timeout - if no audio for this many milliseconds, finish recognition
+
     def __init__(self):
         # Reuse singleton service instances
-        self.asr_service = _asr_service
         self.tts_service = _tts_service
         self.doubao_llm = _doubao_llm
         self.volcano_coding = _volcano_coding
@@ -40,12 +45,27 @@ class StreamProcessor:
         self.camera_enabled: bool = True
         self.subtitle_enabled: bool = True
         self._processing_lock = asyncio.Lock()
+        self._result_callback: Optional[callable] = None
+
+        # Streaming ASR
+        self.streaming_asr: Optional[StreamingASRService] = None
+        self._silence_timer: Optional[asyncio.Task] = None
+        self._silence_timeout_ms = 2000  # 2 seconds silence = end of speech
+        # Buffer for audio chunks arrived before ASR connects
+        self._pending_audio_buffer: list[bytes] = []
 
     def handle_ping(self) -> PongMessage:
         return PongMessage()
 
     def toggle_audio(self, enabled: bool) -> None:
+        """Toggle audio capture and reset streaming ASR"""
         self.audio_enabled = enabled
+        if enabled:
+            # When audio is enabled again, start fresh streaming ASR
+            asyncio.create_task(self._start_streaming_asr())
+        else:
+            # When audio is disabled, stop any ongoing recognition
+            asyncio.create_task(self._stop_streaming_asr())
 
     def toggle_camera(self, enabled: bool) -> None:
         self.camera_enabled = enabled
@@ -58,23 +78,121 @@ class StreamProcessor:
         self.latest_camera_frame = base64_data
 
     async def process_audio_chunk(self, base64_data: str) -> AsyncGenerator[ServerMessage, None]:
-        """Process audio chunk with ASR and run full pipeline"""
+        """Process audio chunk with streaming ASR.
+        Partial results are sent immediately for real-time display.
+        After silence timeout, final result is processed by LLM.
+        """
         if not self.audio_enabled:
             return
 
-        # ASR recognition
-        asr_result = await self.asr_service.recognize(base64_data)
-        if not asr_result.success or not asr_result.text.strip():
+        # Decode audio data
+        audio_data = base64.b64decode(base64_data)
+
+        if not self.streaming_asr:
+            # Buffer audio chunks while ASR is connecting
+            self._pending_audio_buffer.append(audio_data)
             return
 
-        # Yield transcript
-        yield UserTranscriptMessage(text=asr_result.text)
+        if not self.streaming_asr.is_transcription_started():
+            # First audio chunk has arrived - start transcription now
+            # This avoids IDLE_TIMEOUT because we send StartTranscription
+            # and immediately start sending audio data, no idle time
+            started = await self.streaming_asr.start_transcription()
+            if started:
+                # Send any buffered audio chunks that arrived before transcription started
+                if self._pending_audio_buffer:
+                    for chunk in self._pending_audio_buffer:
+                        await self.streaming_asr.send_audio_chunk(chunk)
+                    self._pending_audio_buffer.clear()
+
+                # Send current audio chunk too
+                await self.streaming_asr.send_audio_chunk(audio_data)
+            # else: connection not ready yet, next chunk will retry
+        else:
+            # Transcription already started - send immediately
+            await self.streaming_asr.send_audio_chunk(audio_data)
+
+        # Reset the silence timer - if we don't get more audio for timeout, we stop
+        if self._silence_timer:
+            self._silence_timer.cancel()
+
+        # Schedule a new timer - after timeout, process final result
+        self._silence_timer = asyncio.create_task(self._silence_timeout_process())
+
+        # Yield nothing now - partial results come from streaming ASR callbacks
+        # The yield below ensures this is recognized as an async generator
+        if False:
+            yield
+
+    async def _start_streaming_asr(self) -> None:
+        """Start streaming ASR session"""
+        if self.streaming_asr:
+            await self._stop_streaming_asr()
+
+        self.streaming_asr = StreamingASRService()
+
+        def on_partial(text: str):
+            """Called by streaming ASR when partial result available"""
+            if self._result_callback:
+                # Send partial result immediately to frontend for real-time display
+                self._result_callback(UserTranscriptPartialMessage(text=text))
+
+        # Only establish connection, don't send StartTranscription yet
+        # StartTranscription will be sent when first audio chunk arrives
+        await self.streaming_asr.start(on_partial, self._on_final_result)
+        logger.info("streaming_asr_session_started", buffered_chunks=len(self._pending_audio_buffer))
+
+    def _on_final_result(self, final_text: str) -> None:
+        """Called by streaming ASR when final result is available"""
+        pass
+
+    async def _silence_timeout_process(self) -> None:
+        """Called after silence timeout - process final result"""
+        await asyncio.sleep(self._silence_timeout_ms / 1000)
+
+        if not self.streaming_asr:
+            return
+        final_text = self.streaming_asr.get_current_text().strip()
+        if not final_text:
+            return
+
+        # Stop streaming ASR for this utterance
+        await self._stop_streaming_asr()
+
+        # Send final transcript
+        if self._result_callback:
+            self._result_callback(UserTranscriptMessage(text=final_text))
+
+        # Process the final result with LLM and send all responses
+        if self._result_callback:
+            async for msg in self.process_final_transcript(final_text):
+                self._result_callback(msg)
+
+    def set_result_callback(self, callback: callable) -> None:
+        """Set callback to send ServerMessage to websocket"""
+        self._result_callback = callback
+
+    async def _stop_streaming_asr(self) -> None:
+        """Stop current streaming ASR session"""
+        if self._silence_timer:
+            self._silence_timer.cancel()
+            self._silence_timer = None
+        if self.streaming_asr:
+            await self.streaming_asr.close()
+            self.streaming_asr = None
+        # Clear pending buffer for next connection
+        self._pending_audio_buffer.clear()
+
+    async def process_final_transcript(self, text: str) -> AsyncGenerator[ServerMessage, None]:
+        """Process final user transcript with LLM and TTS"""
+        if not text.strip():
+            return
 
         # Add to conversation
         self.conversation_history.append(ConversationMessage(
             id=f"{int(asyncio.get_event_loop().time() * 1000)}-user",
             role="user",
-            text=asr_result.text,
+            text=text,
             timestamp=int(asyncio.get_event_loop().time() * 1000)
         ))
         # Trim history to prevent infinite growth - keep max 50 messages

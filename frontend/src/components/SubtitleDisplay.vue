@@ -8,6 +8,11 @@
     >
       {{ message.text }}
     </div>
+    <!-- Real-time partial transcript (recognized while speaking) -->
+    <div v-if="partialText" class="partial-transcript">
+      <span class="recording-indicator"></span>
+      {{ partialText }}
+    </div>
   </div>
 </template>
 
@@ -18,6 +23,7 @@ import { SUBTITLE_OPACITY_WITH_CAMERA } from '@seeworldweb/shared/src/constants'
 interface Props {
   messages: ConversationMessage[];
   cameraEnabled: boolean;
+  partialText: string;
 }
 
 defineProps<Props>();
@@ -63,5 +69,39 @@ defineProps<Props>();
   align-self: flex-start;
   background: white;
   color: #333;
+}
+
+/* Partial transcript (real-time recognition) */
+.partial-transcript {
+  align-self: center;
+  max-width: 90%;
+  margin-top: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.5);
+  color: #666;
+  font-size: 0.9rem;
+  font-style: italic;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Animated recording indicator */
+.recording-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #dc3545;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
 }
 </style>

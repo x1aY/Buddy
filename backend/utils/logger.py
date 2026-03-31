@@ -70,6 +70,12 @@ def setup_logging() -> None:
     for handler in handlers:
         root_logger.addHandler(handler)
 
+    # Set higher log level for noisy third-party libraries
+    # websockets prints every binary frame in debug mode which is too verbose
+    logging.getLogger("websockets").setLevel(logging.INFO)
+    logging.getLogger("uvicorn").setLevel(logging.INFO)
+    logging.getLogger("fastapi").setLevel(logging.INFO)
+
 
 def get_logger(name: str = __name__):
     """Get a structured logger instance."""

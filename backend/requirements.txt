@@ -6,6 +6,7 @@ pyjwt
 httpx
 python-dotenv
 pydantic-settings
+websockets
 
 # Testing
 pytest

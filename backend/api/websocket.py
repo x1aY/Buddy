@@ -27,6 +27,8 @@ async def websocket_endpoint(
 ):
     """WebSocket endpoint for media streaming"""
     await websocket.accept()
+    client_addr = f"{websocket.client.host}:{websocket.client.port}"
+    logger.info("frontend_connected", client_address=client_addr)
 
     # Authenticate - allow missing token for guest mode
     user_id: Optional[str] = None
@@ -41,13 +43,26 @@ async def websocket_endpoint(
     # Create stream processor for this connection
     processor = StreamProcessor()
 
+    # Set callback for streaming messages (partial ASR results)
+    async def send_server_message(message):
+        await send_message(websocket, message)
+
+    def sync_send(message):
+        """Synchronous callback for streaming results"""
+        import asyncio
+        asyncio.create_task(send_server_message(message))
+
+    processor.set_result_callback(sync_send)
+
     # Statistics for rate-limited logging
     stats = {
         'audio_chunks': 0,
         'camera_frames': 0,
         'total_audio_bytes': 0,
         'total_camera_bytes': 0,
-        'last_log_time': 0
+        'last_log_time': 0,
+        'has_logged_audio_active': False,
+        'has_logged_camera_active': False
     }
     DATA_TRANSFER_LOG_INTERVAL = 60  # Log once per minute
 
@@ -72,15 +87,22 @@ async def websocket_endpoint(
                 msg = AudioChunkMessage(**msg_dict)
                 stats['audio_chunks'] += 1
                 stats['total_audio_bytes'] += len(msg.data)
-                # Check if we need to log
+
+                # Log once when audio starts
+                if not stats['has_logged_audio_active']:
+                    logger.warning("audio_stream_active", client_address=client_addr, first_chunk_size_bytes=len(msg.data))
+                    stats['has_logged_audio_active'] = True
+
+                # Periodic stats logging
                 if current_time - stats['last_log_time'] >= DATA_TRANSFER_LOG_INTERVAL:
-                    logger.info(
-                        "data_transfer_stats",
-                        audio_chunks=stats['audio_chunks'],
-                        camera_frames=stats['camera_frames'],
-                        total_audio_bytes=stats['total_audio_bytes'],
-                        total_camera_bytes=stats['total_camera_bytes']
-                    )
+                    if stats['audio_chunks'] > 0 or stats['camera_frames'] > 0:
+                        logger.warning(
+                            "data_transfer_stats",
+                            audio_chunks=stats['audio_chunks'],
+                            camera_frames=stats['camera_frames'],
+                            total_audio_kb=round(stats['total_audio_bytes'] / 1024, 1),
+                            total_camera_kb=round(stats['total_camera_bytes'] / 1024, 1)
+                        )
                     # Reset stats after logging
                     stats['audio_chunks'] = 0
                     stats['camera_frames'] = 0
@@ -94,15 +116,22 @@ async def websocket_endpoint(
                 msg = CameraFrameMessage(**msg_dict)
                 stats['camera_frames'] += 1
                 stats['total_camera_bytes'] += len(msg.data)
-                # Check if we need to log (same interval as audio)
+
+                # Log once when camera starts
+                if not stats['has_logged_camera_active']:
+                    logger.info("video_stream_active", client_address=client_addr)
+                    stats['has_logged_camera_active'] = True
+
+                # Periodic stats logging
                 if current_time - stats['last_log_time'] >= DATA_TRANSFER_LOG_INTERVAL:
-                    logger.info(
-                        "data_transfer_stats",
-                        audio_chunks=stats['audio_chunks'],
-                        camera_frames=stats['camera_frames'],
-                        total_audio_bytes=stats['total_audio_bytes'],
-                        total_camera_bytes=stats['total_camera_bytes']
-                    )
+                    if stats['audio_chunks'] > 0 or stats['camera_frames'] > 0:
+                        logger.info(
+                            "data_transfer_stats",
+                            audio_chunks=stats['audio_chunks'],
+                            camera_frames=stats['camera_frames'],
+                            total_audio_kb=round(stats['total_audio_bytes'] / 1024, 1),
+                            total_camera_kb=round(stats['total_camera_bytes'] / 1024, 1)
+                        )
                     # Reset stats after logging
                     stats['audio_chunks'] = 0
                     stats['camera_frames'] = 0
@@ -113,21 +142,29 @@ async def websocket_endpoint(
 
             elif msg_type == "toggle_audio":
                 msg = ToggleAudioMessage(**msg_dict)
+                if not msg.enabled:
+                    stats['has_logged_audio_active'] = False
                 processor.toggle_audio(msg.enabled)
+                logger.info("audio_toggled", enabled=msg.enabled)
 
             elif msg_type == "toggle_camera":
                 msg = ToggleCameraMessage(**msg_dict)
+                if not msg.enabled:
+                    stats['has_logged_camera_active'] = False
                 processor.toggle_camera(msg.enabled)
+                logger.info("camera_toggled", enabled=msg.enabled)
 
             elif msg_type == "toggle_subtitle":
                 msg = ToggleSubtitleMessage(**msg_dict)
                 processor.toggle_subtitle(msg.enabled)
+                logger.info("subtitle_toggled", enabled=msg.enabled)
 
             else:
                 await send_message(websocket, ErrorMessage(message=f"Unknown message type: {msg_type}"))
+                logger.warning("unknown_message_type", type=msg_type)
 
     except WebSocketDisconnect:
-        # Connection closed
+        logger.info("frontend_disconnected", client_address=client_addr)
         pass
 
 
