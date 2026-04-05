@@ -56,11 +56,14 @@ class StreamProcessor:
         # Buffer for audio chunks arrived before ASR connects
         self._pending_audio_buffer: list[bytes] = []
 
-        # Streaming ASR segmentation - for multiple bubbles
+        # Streaming ASR segmentation - multiple bubble support
+        # Each bubble = one segment, new bubble after silence timeout
         self._current_segment_id: Optional[str] = None
+        self._current_segment_sentences: list[str] = []  # Sentences completed by ALiyun in current bubble
+        self._current_segment_ongoing: str = ""          # Ongoing sentence in current bubble
         self._segment_silence_timer: Optional[asyncio.Task] = None
-        self._segment_timeout_ms: int = 700  # Segment silence timeout (ms)
-        self._finished_segments: list[str] = []  # Completed segment texts
+        self._segment_timeout_ms: int = 3000  # 3000ms = create new bubble after 3s of silence
+        self._finished_segments: list[str] = []  # Completed full segments (each is one bubble) - combined when LLM timeout triggers
 
     def handle_ping(self) -> PongMessage:
         return PongMessage()
@@ -142,31 +145,43 @@ class StreamProcessor:
         def on_partial(text: str):
             """Called by streaming ASR when partial result available.
             Create new segment if none active, update text, send to frontend.
+
+            ALiyun ASR clears text after SentenceEnd, so we accumulate the full
+            text of current segment ourselves to avoid losing previous sentences.
             """
             if not self._result_callback:
                 return
 
-            # Create new segment if none active
             if self._current_segment_id is None:
+                # Start of new bubble
                 segment_id = str(int(asyncio.get_event_loop().time() * 1000))
                 self._current_segment_id = segment_id
+                self._current_segment_sentences.clear()
+                self._current_segment_ongoing = text
             else:
                 segment_id = self._current_segment_id
+                # ALiyun gives us updated text for the ongoing sentence
+                self._current_segment_ongoing = text
 
-            # Reset segment silence timer
+            # Cancel existing timeout - we got new speech
             if self._segment_silence_timer:
                 self._segment_silence_timer.cancel()
 
+            # Combine all completed sentences + current ongoing for frontend display
+            full_current_text = " ".join(
+                self._current_segment_sentences + [self._current_segment_ongoing]
+            ).strip()
+
             # Schedule new segment timeout
             self._segment_silence_timer = asyncio.create_task(
-                self._segment_silence_timeout(segment_id, text)
+                self._segment_silence_timeout(segment_id, full_current_text)
             )
 
             # Send ongoing update to frontend for real-time display
             if self._result_callback:
                 self._result_callback(UserTranscriptOngoingMessage(
                     message_id=segment_id,
-                    text=text
+                    text=full_current_text
                 ))
 
         # Only establish connection, don't send StartTranscription yet
@@ -175,27 +190,29 @@ class StreamProcessor:
         logger.info("streaming_asr_session_started", buffered_chunks=len(self._pending_audio_buffer))
 
     def _on_final_result(self, final_text: str) -> None:
-        """Called by streaming ASR when final result is available"""
-        pass
+        """Called when ALiyun ASR detects a SentenceEnd.
+        ALiyun clears buffer after SentenceEnd, so we save the completed sentence
+        to our current bubble before it disappears - we don't create a new bubble
+        until our silence timeout triggers.
+        """
+        if final_text.strip() and self._current_segment_id is not None:
+            self._current_segment_sentences.append(final_text.strip())
 
     async def _segment_silence_timeout(self, segment_id: str, final_text: str) -> None:
-        """Called after segment silence timeout - finish this segment.
-        Next speech will start a new bubble.
-        """
+        """After silence timeout: finish current bubble, next speech starts new bubble."""
         await asyncio.sleep(self._segment_timeout_ms / 1000)
 
-        # Save to finished segments
         if final_text.strip():
             self._finished_segments.append(final_text.strip())
 
-        # Notify frontend segment ended
         if self._result_callback:
             self._result_callback(UserTranscriptSegmentEndMessage(
                 message_id=segment_id
             ))
 
-        # Clear current segment - next speech starts new bubble
         self._current_segment_id = None
+        self._current_segment_sentences.clear()
+        self._current_segment_ongoing = ""
 
     async def _silence_timeout_process(self) -> None:
         """Called after silence timeout - process final result"""
@@ -246,6 +263,8 @@ class StreamProcessor:
         self._pending_audio_buffer.clear()
         self._finished_segments.clear()
         self._current_segment_id = None
+        self._current_segment_sentences.clear()
+        self._current_segment_ongoing = ""
 
     async def process_final_transcript(self, text: str) -> AsyncGenerator[ServerMessage, None]:
         """Process final user transcript with LLM and TTS"""
