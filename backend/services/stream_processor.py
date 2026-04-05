@@ -143,7 +143,6 @@ class StreamProcessor:
             """Called by streaming ASR when partial result available.
             Create new segment if none active, update text, send to frontend.
             """
-            global segment_timeout
             if not self._result_callback:
                 return
 
