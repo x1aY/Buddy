@@ -14,6 +14,7 @@ from models.schemas import (
     ToggleAudioMessage,
     ToggleCameraMessage,
     ToggleSubtitleMessage,
+    UserTranscriptClientMessage,
     PingMessage
 )
 from services import StreamProcessor
@@ -158,6 +159,13 @@ async def websocket_endpoint(
                 msg = ToggleSubtitleMessage(**msg_dict)
                 processor.toggle_subtitle(msg.enabled)
                 logger.info("subtitle_toggled", enabled=msg.enabled)
+
+            elif msg_type == "user_transcript":
+                msg = UserTranscriptClientMessage(**msg_dict)
+                # Process user text input directly with LLM
+                if msg.text.strip():
+                    async for response in processor.process_final_transcript(msg.text):
+                        await send_message(websocket, response)
 
             else:
                 await send_message(websocket, ErrorMessage(message=f"Unknown message type: {msg_type}"))

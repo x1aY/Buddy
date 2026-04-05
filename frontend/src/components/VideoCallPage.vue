@@ -130,7 +130,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch, nextTick } from 'vue';
 import { useAuthStore } from '@/stores/auth';
-import { useRouter } from 'vue-router';
 import { useWebSocketClient } from '@/composables/use-websocket-client';
 import { useAudioCapture } from '@/composables/use-audio-capture';
 import { useCameraCapture } from '@/composables/use-camera-capture';
@@ -140,7 +139,6 @@ import { Mic, MicOff, Video, VideoOff, LogOut, Subtitles } from 'lucide-vue-next
 import CameraPreview from './CameraPreview.vue';
 
 const authStore = useAuthStore();
-const router = useRouter();
 const token = authStore.token;
 
 // State
@@ -384,7 +382,6 @@ function sendUserInput() {
 
 function handleLogout() {
   authStore.logout();
-  router.push('/login');
 }
 </script>
 

@@ -61,12 +61,18 @@ class PingMessage(BaseModel):
     type: Literal['ping'] = 'ping'
 
 
+class UserTranscriptClientMessage(BaseModel):
+    type: Literal['user_transcript'] = 'user_transcript'
+    text: str
+
+
 ClientMessage = Union[
     AudioChunkMessage,
     CameraFrameMessage,
     ToggleAudioMessage,
     ToggleCameraMessage,
     ToggleSubtitleMessage,
+    UserTranscriptClientMessage,
     PingMessage
 ]
 
