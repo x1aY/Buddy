@@ -2,8 +2,8 @@ from .huawei_oauth import HuaweiOAuthService
 from .wechat_oauth import WeChatOAuthService
 from .asr import ASRService
 from .tts import TTSService
-from .doubao_llm import DoubaoLLMService
-from .volcano_coding import VolcanoCodingService
+from .anthropic_llm import AnthropicLLMService
+from .openai_llm import OpenAILLMService
 from .stream_processor import StreamProcessor
 
 __all__ = [
@@ -11,7 +11,7 @@ __all__ = [
     'WeChatOAuthService',
     'ASRService',
     'TTSService',
-    'DoubaoLLMService',
-    'VolcanoCodingService',
+    'AnthropicLLMService',
+    'OpenAILLMService',
     'StreamProcessor',
 ]

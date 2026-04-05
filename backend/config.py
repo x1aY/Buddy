@@ -35,14 +35,15 @@ class Settings(BaseSettings):
     alibaba_tts_appkey: Optional[str] = None
     alibaba_tts_token: Optional[str] = None
 
-    # Doubao LLM
-    doubao_api_key: Optional[str] = None
-    doubao_endpoint: str = "https://aquasearch.doubao.com/api/v1/chat/completions"
+    # Anthropic Protocol LLM
+    anthropic_base_url: Optional[str] = "https://api.anthropic.com"
+    anthropic_auth_token: Optional[str] = None
+    anthropic_model: str = "claude-3-sonnet-20240229"
 
-    # Volcano Engine Coding Plan
-    volcano_access_key: Optional[str] = None
-    volcano_secret_key: Optional[str] = None
-    volcano_region: str = "cn-beijing"
+    # OpenAI Protocol LLM (OpenAI, Doubao, etc.)
+    openai_base_url: str = "https://api.openai.com/v1"
+    openai_api_key: Optional[str] = None
+    openai_model: str = "gpt-4o"
 
     class Config:
         env_file = ".env"

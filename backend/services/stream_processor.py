@@ -19,7 +19,9 @@ from models.schemas import (
     PongMessage,
     ErrorMessage,
 )
-from services import TTSService, DoubaoLLMService, VolcanoCodingService
+from services import TTSService
+from services.anthropic_llm import AnthropicLLMService
+from services.openai_llm import OpenAILLMService
 from services.streaming_asr import StreamingASRService
 from utils.logger import get_logger
 
@@ -27,8 +29,8 @@ logger = get_logger("stream_processor")
 
 # Singleton service instances - stateless, can be reused across connections
 _tts_service = TTSService()
-_doubao_llm = DoubaoLLMService()
-_volcano_coding = VolcanoCodingService()
+_anthropic_llm = AnthropicLLMService()
+_openai_llm = OpenAILLMService()
 
 
 class StreamProcessor:
@@ -39,8 +41,8 @@ class StreamProcessor:
     def __init__(self):
         # Reuse singleton service instances
         self.tts_service = _tts_service
-        self.doubao_llm = _doubao_llm
-        self.volcano_coding = _volcano_coding
+        self.anthropic_llm = _anthropic_llm
+        self.openai_llm = _openai_llm
         self.conversation_history: list[ConversationMessage] = []
         self.latest_camera_frame: Optional[str] = None
         self.audio_enabled: bool = True
@@ -52,7 +54,7 @@ class StreamProcessor:
         # Streaming ASR
         self.streaming_asr: Optional[StreamingASRService] = None
         self._silence_timer: Optional[asyncio.Task] = None
-        self._silence_timeout_ms = 2000  # 2 seconds silence = end of speech
+        self._silence_timeout_ms = 4000  # 4 seconds silence = end of speech (longer than segment timeout)
         # Buffer for audio chunks arrived before ASR connects
         self._pending_audio_buffer: list[bytes] = []
 
@@ -62,7 +64,7 @@ class StreamProcessor:
         self._current_segment_sentences: list[str] = []  # Sentences completed by ALiyun in current bubble
         self._current_segment_ongoing: str = ""          # Ongoing sentence in current bubble
         self._segment_silence_timer: Optional[asyncio.Task] = None
-        self._segment_timeout_ms: int = 3000  # 3000ms = create new bubble after 3s of silence
+        self._segment_timeout_ms: int = 1500  # 1500ms = trigger LLM after 1.5s of silence
         self._finished_segments: list[str] = []  # Completed full segments (each is one bubble) - combined when LLM timeout triggers
 
     def handle_ping(self) -> PongMessage:
@@ -151,6 +153,9 @@ class StreamProcessor:
             """
             if not self._result_callback:
                 return
+            # Ignore late callbacks if ASR already stopped
+            if not self.streaming_asr:
+                return
 
             if self._current_segment_id is None:
                 # Start of new bubble
@@ -195,12 +200,21 @@ class StreamProcessor:
         to our current bubble before it disappears - we don't create a new bubble
         until our silence timeout triggers.
         """
+        if not self.streaming_asr:
+            return
         if final_text.strip() and self._current_segment_id is not None:
             self._current_segment_sentences.append(final_text.strip())
 
     async def _segment_silence_timeout(self, segment_id: str, final_text: str) -> None:
         """After silence timeout: finish current bubble, next speech starts new bubble."""
         await asyncio.sleep(self._segment_timeout_ms / 1000)
+
+        # If this task was already canceled or we already have a new current segment, bail early
+        # This prevents race conditions where new speech arrives before sleep completes
+        # Also check if ASR is still active - if audio was toggled off/on, this is a stale task
+        if not self.streaming_asr or self._current_segment_id != segment_id:
+            logger.debug("segment_silence_timeout_stale_segment", expected=segment_id, current=self._current_segment_id)
+            return
 
         if final_text.strip():
             self._finished_segments.append(final_text.strip())
@@ -214,22 +228,66 @@ class StreamProcessor:
         self._current_segment_sentences.clear()
         self._current_segment_ongoing = ""
 
+        # If we have finished segments and silence is detected, trigger LLM processing
+        # This handles the case where each bubble is a complete question
+        if len(self._finished_segments) > 0 and self.streaming_asr is not None:
+            logger.info("segment_silence_trigger_llm_processing", segments=len(self._finished_segments))
+            # Check if LLM is already processing (avoid concurrent processing)
+            if self._processing_lock.locked():
+                logger.info("segment_silence_skip_already_processing")
+                return
+            # Combine all finished segments and process immediately
+            final_parts = self._finished_segments.copy()
+            # Clear immediately after copying - prevent duplication if exception occurs later
+            self._finished_segments.clear()
+            current_text = ""
+            if self.streaming_asr:
+                current_text = self.streaming_asr.get_current_text().strip()
+                if current_text:
+                    final_parts.append(current_text)
+            final_text = " ".join(final_parts).strip()
+            if final_text and self._result_callback:
+                logger.info("segment_silence_processing_final_text", length=len(final_text))
+                # We are already in the segment timeout task - clear reference so _stop_streaming_asr doesn't cancel us
+                self._segment_silence_timer = None
+                # Stop streaming ASR before processing
+                await self._stop_streaming_asr()
+                # Do NOT send UserTranscriptMessage again - text already displayed via user_transcript_ongoing
+                # Process with LLM
+                async for msg in self.process_final_transcript(final_text):
+                    self._result_callback(msg)
+                await self._restart_asr_if_enabled()
+
     async def _silence_timeout_process(self) -> None:
         """Called after silence timeout - process final result"""
+        logger.info("silence_timeout_triggered")
         await asyncio.sleep(self._silence_timeout_ms / 1000)
 
         if not self.streaming_asr:
+            logger.info("silence_timeout_skip_no_streaming_asr")
+            return
+
+        # If we already have processed segments via segment_silence_timeout,
+        # _finished_segments will be empty - no need to process again
+        if len(self._finished_segments) == 0 and self._current_segment_id is None:
+            logger.info("silence_timeout_skip_already_processed")
             return
 
         # Combine all finished segments + any current ongoing segment
         final_parts = self._finished_segments.copy()
+        # Clear immediately after copying - prevent duplication if exception occurs later
+        self._finished_segments.clear()
+        logger.info("silence_timeout_segments", finished_count=len(final_parts))
         if self.streaming_asr:
             current_text = self.streaming_asr.get_current_text().strip()
+            logger.info("silence_timeout_current_text", length=len(current_text), text=current_text[:100])
             if current_text:
                 final_parts.append(current_text)
 
         final_text = " ".join(final_parts).strip()
+        logger.info("silence_timeout_final_text", length=len(final_text), text=final_text[:100])
         if not final_text:
+            logger.info("silence_timeout_skip_empty_text")
             return
 
         # Stop streaming ASR for this utterance
@@ -241,8 +299,10 @@ class StreamProcessor:
 
         # Process the final result with LLM and send all responses
         if self._result_callback:
+            logger.info("starting_llm_processing", final_text_length=len(final_text))
             async for msg in self.process_final_transcript(final_text):
                 self._result_callback(msg)
+        await self._restart_asr_if_enabled()
 
     def set_result_callback(self, callback: callable) -> None:
         """Set callback to send ServerMessage to websocket"""
@@ -266,6 +326,13 @@ class StreamProcessor:
         self._current_segment_sentences.clear()
         self._current_segment_ongoing = ""
 
+    async def _restart_asr_if_enabled(self) -> None:
+        """Restart streaming ASR after LLM processing if audio is still enabled.
+        This allows continuous conversation where user can keep speaking after AI responds.
+        """
+        if self.audio_enabled:
+            await self._start_streaming_asr()
+
     async def process_final_transcript(self, text: str) -> AsyncGenerator[ServerMessage, None]:
         """Process final user transcript with LLM and TTS"""
         if not text.strip():
@@ -288,10 +355,12 @@ class StreamProcessor:
 
     async def _run_llm_pipeline(self) -> AsyncGenerator[ServerMessage, None]:
         """Run the full LLM -> TTS pipeline"""
+        logger.info("run_llm_pipeline_started")
         async with self._processing_lock:
             # Prepare LLM messages with vision if we have a camera frame
             llm_messages = self._build_llm_messages()
             session_id = str(int(asyncio.get_event_loop().time() * 1000))
+            logger.info("llm_messages_built", count=len(llm_messages), session_id=session_id)
 
             yield ModelStartMessage(sessionId=session_id)
 
@@ -299,12 +368,19 @@ class StreamProcessor:
             full_response = ""
 
             # Stream LLM tokens
-            # Use Volcano Coding if available, otherwise Doubao
-            if settings.volcano_access_key:
-                stream = self.volcano_coding.chat_stream(llm_messages)
+            # Priority: Anthropic protocol → OpenAI protocol
+            if self.anthropic_llm.is_configured():
+                logger.info("llm_selected", protocol="anthropic")
+                stream = self.anthropic_llm.chat_stream(llm_messages)
+            elif self.openai_llm.is_configured():
+                logger.info("llm_selected", protocol="openai")
+                stream = self.openai_llm.chat_stream(llm_messages)
             else:
-                stream = self.doubao_llm.chat_stream(llm_messages)
+                logger.error("no_llm_configured")
+                yield ErrorMessage(message="No LLM service configured. Please set ANTHROPIC_AUTH_TOKEN or OPENAI_API_KEY in .env")
+                return
 
+            logger.info("llm_stream_started")
             async for token in stream:
                 full_response += token
                 yield ModelTokenMessage(token=token)
@@ -338,15 +414,20 @@ class StreamProcessor:
 
         # Add conversation history
         for msg in self.conversation_history[-10:]:  # Keep last 10 messages for context
+            # Map internal role name to LLMMessage allowed values
+            role = msg.role
+            if role == "model":
+                role = "assistant"
+
             if msg.role == "user" and msg is self.conversation_history[-1] and self.latest_camera_frame:
                 # Last user message has image context
                 content = [
                     LLMContentPart(type="text", text=msg.text),
                     LLMContentPart(type="image", image=self.latest_camera_frame)
                 ]
-                messages.append(LLMMessage(role="user", content=content))
+                messages.append(LLMMessage(role=role, content=content))
             else:
-                messages.append(LLMMessage(role=msg.role, content=msg.text))
+                messages.append(LLMMessage(role=role, content=msg.text))
 
         return messages
 
