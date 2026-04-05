@@ -1,49 +1,107 @@
 <template>
-  <div class="video-call-page full-screen flex-column">
-    <!-- Camera Preview (when enabled) -->
-    <CameraPreview v-if="cameraEnabled" :stream="cameraStream" />
+  <div class="min-h-screen w-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative overflow-hidden">
+    <!-- 背景装饰 -->
+    <div class="absolute inset-0 overflow-hidden pointer-events-none">
+      <div class="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl"></div>
+      <div
+        class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-bg-float"
+      ></div>
+    </div>
 
-    <!-- Main content container -->
-    <div class="main-container" :class="{ 'camera-on': cameraEnabled }">
-      <!-- Top bar with subtitle toggle -->
-      <div class="top-bar">
-        <SubtitleToggle
-          :enabled="subtitleEnabled"
-          @toggle="toggleSubtitle"
-        />
+    <!-- 摄像头预览 -->
+    <transition name="fade">
+      <CameraPreview v-if="cameraEnabled" :stream="cameraStream" />
+    </transition>
+
+    <!-- 主内容区 -->
+    <div class="relative z-10 h-screen flex flex-col">
+      <!-- 字幕开关按钮 -->
+      <div class="absolute top-6 right-6">
+        <button
+          @click="toggleSubtitle"
+          :class="[
+            'btn-toggle-sm',
+            isSubtitleEnabled
+              ? 'bg-amber-500 text-white'
+              : 'btn-toggle-inactive'
+          ]"
+        >
+          <Subtitles class="w-5 h-5" />
+          字幕{{ isSubtitleEnabled ? '开启' : '关闭' }}
+        </button>
       </div>
 
-      <!-- Center area: robot icon or nothing when subtitle enabled -->
-      <div class="center-area flex-center">
-        <div v-if="!subtitleEnabled && !cameraEnabled" class="robot-container">
-          <img src="/robot-icon.svg" alt="Robot" class="robot-icon" />
-          <p v-if="!isConnected" class="connecting-text">连接中...</p>
-          <p v-if="isConnected && !audioEnabled" class="hint-text">点击左下角麦克风开始对话</p>
-        </div>
+      <!-- 中心内容区域 -->
+      <div class="flex-1 flex items-start justify-center p-6 pt-16">
+        <transition mode="out-in">
+          <!-- AI悬浮球 -->
+          <div
+            v-if="!isSubtitleEnabled"
+            key="orb"
+            class="text-center flex flex-col items-center justify-center h-full"
+          >
+            <AIOrb :state="aiOrbState" />
+            <p
+              class="mt-16 text-lg"
+              :class="cameraEnabled ? 'text-white/90' : 'text-gray-400'"
+            >
+              点击麦克风开始对话
+            </p>
+          </div>
 
-        <!-- Subtitle display -->
-        <SubtitleDisplay
-          v-if="subtitleEnabled"
-          :messages="conversationMessages"
-          :cameraEnabled="cameraEnabled"
-          :partialText="partialUserTranscript"
-        />
+          <!-- 对话字幕区域 -->
+          <div
+            v-else
+            key="subtitles"
+            class="w-full max-w-4xl max-h-[60vh] overflow-y-auto px-4"
+          >
+            <SubtitleDisplay
+              :messages="conversationMessages"
+              :camera-enabled="cameraEnabled"
+              :partial-text="partialUserTranscript"
+            />
+          </div>
+        </transition>
       </div>
 
-      <!-- Bottom control bar -->
-      <div class="bottom-bar flex-center">
-        <AudioToggle
-          :enabled="audioEnabled"
-          @toggle="toggleAudio"
-        />
-        <CameraToggle
-          :enabled="cameraEnabled"
-          @toggle="toggleCamera"
-        />
-        <button class="logout-btn" @click="handleLogout">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 0.5rem;">
-            <path d="M17 17l5-5-5-5v3H9v4h8v3zm3-13H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2z"/>
-          </svg>
+      <!-- 底部控制栏 -->
+      <div class="p-6 flex justify-center items-center gap-4">
+        <!-- 麦克风按钮 -->
+        <button
+          @click="toggleAudio"
+          :class="[
+            'px-8 py-4 rounded-full font-medium shadow-xl transition-all duration-200 flex items-center gap-3 hover:scale-[1.05] active:scale-[0.95]',
+            isAudioEnabled
+              ? 'bg-green-500 text-white'
+              : 'bg-gray-700/80 text-gray-300 backdrop-blur-sm'
+          ]"
+        >
+          <Mic v-if="isAudioEnabled" class="w-5 h-5" />
+          <MicOff v-else class="w-5 h-5" />
+          声音{{ isAudioEnabled ? '开启' : '关闭' }}
+        </button>
+
+        <!-- 摄像头按钮 -->
+        <button
+          @click="toggleCamera"
+          :class="[
+            'px-8 py-4 rounded-full font-medium shadow-xl transition-all duration-200 flex items-center gap-3 hover:scale-[1.05] active:scale-[0.95]',
+            cameraEnabled
+              ? 'bg-blue-500 text-white'
+              : 'bg-gray-700/80 text-gray-300 backdrop-blur-sm'
+          ]"
+        >
+          <Video v-if="cameraEnabled" class="w-5 h-5" />
+          <VideoOff v-else class="w-5 h-5" />
+          摄像头{{ cameraEnabled ? '开启' : '关闭' }}
+        </button>
+
+        <!-- 退出登录按钮 -->
+        <button
+          @click="handleLogout"
+          class="px-8 py-4 bg-red-600 hover:bg-red-700 text-white rounded-full font-medium shadow-xl transition-all duration-200 flex items-center gap-3 hover:scale-[1.05] active:scale-[0.95]"
+        >
+          <LogOut class="w-5 h-5" />
           退出登录
         </button>
       </div>
@@ -52,31 +110,64 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useRouter } from 'vue-router';
 import { useWebSocketClient } from '@/composables/use-websocket-client';
 import { useAudioCapture } from '@/composables/use-audio-capture';
 import { useCameraCapture } from '@/composables/use-camera-capture';
-import AudioToggle from './AudioToggle.vue';
-import CameraToggle from './CameraToggle.vue';
-import SubtitleToggle from './SubtitleToggle.vue';
+import { ConversationMessage, ServerMessage } from '@seeworldweb/shared/src/types';
+import { DEFAULT_SUBTITLE_ENABLED } from '@seeworldweb/shared/src/constants';
+import { Mic, MicOff, Video, VideoOff, LogOut, Subtitles } from 'lucide-vue-next';
+import AIOrb from './AIOrb.vue';
 import SubtitleDisplay from './SubtitleDisplay.vue';
 import CameraPreview from './CameraPreview.vue';
-import { ConversationMessage, ServerMessage } from '@seeworldweb/shared/src/types';
-import {
-  DEFAULT_SUBTITLE_ENABLED
-} from '@seeworldweb/shared/src/constants';
+
+type AIOrbState = "listening" | "thinking" | "speaking";
 
 const authStore = useAuthStore();
 const router = useRouter();
 const token = authStore.token;
 
 // State
-const subtitleEnabled = ref(DEFAULT_SUBTITLE_ENABLED);
+const isSubtitleEnabled = ref(DEFAULT_SUBTITLE_ENABLED);
 const conversationMessages = ref<ConversationMessage[]>([]);
 const currentModelMessage = ref('');
-const partialUserTranscript = ref('');  // Real-time partial ASR result
+const partialUserTranscript = ref('');
+const isPlayingAudio = ref(false);
+
+// Derived AI orb state based on current conversation status
+const aiOrbState = computed<AIOrbState>(() => {
+  if (!isAudioEnabled.value) {
+    return "listening";
+  }
+
+  // If we have a partial transcript, we're listening
+  if (partialUserTranscript.value) {
+    return "listening";
+  }
+
+  // If we're playing audio, we're speaking
+  if (isPlayingAudio.value) {
+    return "speaking";
+  }
+
+  // If currentModelMessage is being built, we're thinking
+  if (currentModelMessage.value && conversationMessages.value.length > 0 &&
+      conversationMessages.value[conversationMessages.value.length - 1].role === 'model') {
+    // Still getting tokens - thinking
+    if (currentModelMessage.value !== conversationMessages.value[conversationMessages.value.length - 1].text) {
+      return "thinking";
+    } else {
+      // Done generating, playing audio - speaking
+      return "speaking";
+    }
+  } else if (currentModelMessage.value) {
+    return "thinking";
+  } else {
+    return "listening";
+  }
+});
 
 // Composables
 const { isConnected, connect, send, onMessage } = useWebSocketClient(token);
@@ -88,7 +179,7 @@ const { toggle: originalCameraToggle, isEnabled: cameraEnabled, getVideoStream }
   });
 });
 
-const { toggle: audioToggle, isEnabled: audioEnabled } = useAudioCapture((chunk) => {
+const { toggle: audioToggle, isEnabled: isAudioEnabled } = useAudioCapture((chunk) => {
   send({
     type: 'audio_chunk',
     data: chunk
@@ -119,11 +210,14 @@ function handleServerMessage(message: ServerMessage) {
   switch (message.type) {
     case 'user_transcript_partial':
       // Real-time update of partial user transcript
-      partialUserTranscript.value = message.text;
+      partialUserTranscript.value = message.text || '';
       break;
 
     case 'user_transcript':
       // Final user transcript - add to conversation, clear partial
+      if (message.text === undefined) {
+        break;
+      }
       conversationMessages.value.push({
         id: Date.now().toString() + '-user',
         role: 'user',
@@ -139,7 +233,7 @@ function handleServerMessage(message: ServerMessage) {
       break;
 
     case 'model_token':
-      currentModelMessage.value += message.token;
+      currentModelMessage.value += message.token!;
       // Update last message if it's already a model message
       if (conversationMessages.value.length > 0 &&
           conversationMessages.value[conversationMessages.value.length - 1].role === 'model') {
@@ -156,7 +250,11 @@ function handleServerMessage(message: ServerMessage) {
 
     case 'model_audio':
       // Play audio
+      if (message.data === undefined) {
+        break;
+      }
       playAudio(message.data);
+      isPlayingAudio.value = true;
       break;
 
     case 'pong':
@@ -169,11 +267,18 @@ function handleServerMessage(message: ServerMessage) {
   }
 }
 
+// Reuse single Audio instance for TTS playback
+const audioPlayer = new Audio();
+
 function playAudio(base64Audio: string) {
-  const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
-  audio.play().catch(err => {
+  audioPlayer.src = `data:audio/mp3;base64,${base64Audio}`;
+  audioPlayer.play().catch(err => {
     console.error('Failed to play audio', err);
   });
+  // When audio ends, go back to listening
+  audioPlayer.onended = () => {
+    isPlayingAudio.value = false;
+  };
 }
 
 async function toggleAudio() {
@@ -194,10 +299,10 @@ async function toggleCamera() {
 }
 
 function toggleSubtitle() {
-  subtitleEnabled.value = !subtitleEnabled.value;
+  isSubtitleEnabled.value = !isSubtitleEnabled.value;
   send({
     type: 'toggle_subtitle',
-    enabled: subtitleEnabled.value
+    enabled: isSubtitleEnabled.value
   });
 }
 
@@ -207,66 +312,27 @@ function handleLogout() {
 }
 </script>
 
-<style scoped>
-.video-call-page {
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  position: relative;
+<style>
+@keyframes bgFloat {
+  0%, 100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(50px, 30px);
+  }
 }
 
-.main-container {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  z-index: 10;
-  transition: all 0.3s ease;
+.animate-bg-float {
+  animation: bgFloat 8s infinite ease-in-out;
 }
 
-.main-container.camera-on {
-  background: transparent;
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
 }
 
-.top-bar {
-  padding: 1rem;
-  text-align: right;
-}
-
-.center-area {
-  flex: 1;
-  position: relative;
-  overflow-y: auto;
-}
-
-.robot-container {
-  text-align: center;
-}
-
-.robot-icon {
-  width: 200px;
-  height: 200px;
-  opacity: 0.9;
-  margin-bottom: 1rem;
-}
-
-.connecting-text, .hint-text {
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 1rem;
-}
-
-.bottom-bar {
-  padding: 1.5rem;
-  gap: 1.5rem;
-  background: rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(10px);
-}
-
-.logout-btn {
-  padding: 1rem 1.5rem;
-  border-radius: 50px;
-  background: #dc3545;
-  color: white;
-  font-size: 1rem;
-  font-weight: 500;
-  box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>

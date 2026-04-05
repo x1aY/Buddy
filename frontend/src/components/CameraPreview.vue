@@ -1,39 +1,30 @@
 <template>
-  <div class="camera-preview full-screen">
+  <div class="absolute inset-0 z-0 overflow-hidden">
     <video
       ref="videoRef"
-      :srcObject="stream"
       autoplay
       playsinline
       muted
-      class="video"
+      class="w-full h-full object-cover"
     />
+    <div class="absolute inset-0 bg-black/20"></div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 
 interface Props {
   stream: MediaStream | null;
 }
 
-defineProps<Props>();
+const props = defineProps<Props>();
 const videoRef = ref<HTMLVideoElement | null>(null);
+
+// Update srcObject when stream changes
+watch(() => props.stream, (newStream) => {
+  if (videoRef.value && newStream) {
+    videoRef.value.srcObject = newStream;
+  }
+}, { immediate: true });
 </script>
-
-<style scoped>
-.camera-preview {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 1;
-  overflow: hidden;
-}
-
-.video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-</style>

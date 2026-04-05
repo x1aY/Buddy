@@ -1,36 +1,70 @@
 <template>
-  <div class="login-page flex-center full-screen">
-    <div class="login-card">
-      <h1 class="title">SeeWorld AI</h1>
-      <p class="subtitle">与AI进行实时音视频对话</p>
+  <div class="min-h-screen w-full bg-black flex items-center justify-center p-4 relative overflow-hidden">
+    <!-- 背景光效 -->
+    <div class="absolute inset-0">
+      <div
+        class="absolute top-0 left-1/4 w-[500px] h-[500px] bg-indigo-600/20 rounded-full blur-[120px] animate-bg-pulse-1"
+      ></div>
+      <div
+        class="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-purple-600/20 rounded-full blur-[120px] animate-bg-pulse-2"
+      ></div>
+    </div>
 
-      <div class="login-buttons">
-        <button class="login-btn huawei" @click="loginWithHuawei">
-          <span class="icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/>
-            </svg>
-          </span>
-          华为账号登录
+    <div
+      class="w-full max-w-md relative z-10 animate-fade-in-up"
+    >
+      <!-- Logo和标题 -->
+      <div class="text-center mb-16">
+        <div
+          class="inline-flex items-center justify-center mb-8 animate-scale-in"
+        >
+          <Sparkles class="w-12 h-12 text-indigo-400" />
+        </div>
+        <h1
+          class="text-5xl font-bold text-white mb-4 tracking-tight animate-title-in"
+        >
+          SeeWorld AI
+        </h1>
+        <p
+          class="text-gray-400 text-lg animate-subtitle-in"
+        >
+          实时视觉对话智能体
+        </p>
+      </div>
+
+      <!-- 登录按钮 -->
+      <div class="space-y-3">
+        <button
+          @click="loginWithHuawei"
+          class="w-full bg-white/5 backdrop-blur-sm border border-white/10 text-white py-5 rounded-2xl font-medium transition-all duration-200 flex items-center justify-center gap-3 hover:border-red-500/50 hover:bg-red-500/15 hover:scale-[1.02] active:scale-[0.98] animate-btn-1"
+        >
+          <Smartphone class="w-5 h-5" />
+          华为账号
         </button>
-        <button class="login-btn wechat" @click="loginWithWechat">
-          <span class="icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4V4c0-1.1-.9-2-2-2z"/>
-            </svg>
-          </span>
-          微信账号登录
+
+        <button
+          @click="loginWithWechat"
+          class="w-full bg-white/5 backdrop-blur-sm border border-white/10 text-white py-5 rounded-2xl font-medium transition-all duration-200 flex items-center justify-center gap-3 hover:border-green-500/50 hover:bg-green-500/15 hover:scale-[1.02] active:scale-[0.98] animate-btn-2"
+        >
+          <MessageSquare class="w-5 h-5" />
+          微信账号
         </button>
-        <div class="divider"></div>
-        <button class="login-btn guest" @click="enterAsGuest">
-          <span class="icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
-            </svg>
-          </span>
-          游客体验
+
+        <button
+          @click="enterAsGuest"
+          class="w-full bg-white/5 backdrop-blur-sm border border-white/10 text-white py-5 rounded-2xl font-medium transition-all duration-200 flex items-center justify-center gap-3 hover:border-indigo-500/50 hover:bg-indigo-500/15 hover:scale-[1.02] active:scale-[0.98] animate-btn-3"
+        >
+          <Eye class="w-5 h-5" />
+          访客体验
         </button>
       </div>
+
+      <!-- 底部提示 -->
+      <p
+        class="text-center text-sm text-gray-600 mt-12 animate-footer-in"
+      >
+        登录即表示同意服务条款与隐私政策
+      </p>
     </div>
   </div>
 </template>
@@ -40,6 +74,7 @@ import { onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { UserInfo } from '@seeworldweb/shared/src/types';
+import { Sparkles, Smartphone, MessageSquare, Eye } from 'lucide-vue-next';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -75,71 +110,94 @@ function enterAsGuest() {
 }
 </script>
 
-<style scoped>
-.login-page {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+<style>
+@keyframes bgPulse1 {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.3;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.5;
+  }
 }
 
-.login-card {
-  background: white;
-  padding: 3rem 2rem;
-  border-radius: 16px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-  text-align: center;
-  min-width: 320px;
+@keyframes bgPulse2 {
+  0%, 100% {
+    transform: scale(1.2);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 0.3;
+  }
 }
 
-.title {
-  font-size: 2rem;
-  color: #333;
-  margin-bottom: 0.5rem;
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 20px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
 }
 
-.subtitle {
-  color: #666;
-  margin-bottom: 2rem;
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
-.login-buttons {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
+.animate-bg-pulse-1 {
+  animation: bgPulse1 8s infinite ease-in-out;
 }
 
-.login-btn {
-  padding: 1rem 2rem;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
+.animate-bg-pulse-2 {
+  animation: bgPulse2 8s infinite ease-in-out;
 }
 
-.login-btn .icon {
-  font-size: 1.2rem;
+.animate-fade-in-up {
+  animation: fadeInUp 0.8s ease-out forwards;
 }
 
-.huawei {
-  background-color: #c00000;
-  color: white;
+.animate-scale-in {
+  animation: scaleIn 0.5s ease forwards;
 }
 
-.wechat {
-  background-color: #07c160;
-  color: white;
+.animate-title-in {
+  animation: fadeInUp 0.8s ease-out 0.3s forwards;
+  opacity: 0;
 }
 
-.guest {
-  background-color: #f0f0f0;
-  color: #666;
-  border: 1px solid #ddd;
+.animate-subtitle-in {
+  animation: fadeInUp 0.8s ease-out 0.4s forwards;
+  opacity: 0;
 }
 
-.divider {
-  height: 1px;
-  background-color: #eee;
-  margin: 0.5rem 0;
+.animate-btn-1 {
+  animation: fadeInUp 0.8s ease-out 0.5s forwards;
+  opacity: 0;
+}
+
+.animate-btn-2 {
+  animation: fadeInUp 0.8s ease-out 0.6s forwards;
+  opacity: 0;
+}
+
+.animate-btn-3 {
+  animation: fadeInUp 0.8s ease-out 0.7s forwards;
+  opacity: 0;
+}
+
+.animate-footer-in {
+  animation: fadeInUp 0.8s ease-out 0.8s forwards;
+  opacity: 0;
 }
 </style>
