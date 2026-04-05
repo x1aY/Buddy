@@ -50,3 +50,4 @@ backend/data/
 # Temp
 *.tmp
 .cache
+.worktrees/
