@@ -10,6 +10,8 @@ from models.schemas import (
     LLMContentPart,
     UserTranscriptMessage,
     UserTranscriptPartialMessage,
+    UserTranscriptOngoingMessage,
+    UserTranscriptSegmentEndMessage,
     ModelStartMessage,
     ModelTokenMessage,
     ModelAudioMessage,
@@ -53,6 +55,12 @@ class StreamProcessor:
         self._silence_timeout_ms = 2000  # 2 seconds silence = end of speech
         # Buffer for audio chunks arrived before ASR connects
         self._pending_audio_buffer: list[bytes] = []
+
+        # Streaming ASR segmentation - for multiple bubbles
+        self._current_segment_id: Optional[str] = None
+        self._segment_silence_timer: Optional[asyncio.Task] = None
+        self._segment_timeout_ms: int = 700  # Segment silence timeout (ms)
+        self._finished_segments: list[str] = []  # Completed segment texts
 
     def handle_ping(self) -> PongMessage:
         return PongMessage()
@@ -132,10 +140,34 @@ class StreamProcessor:
         self.streaming_asr = StreamingASRService()
 
         def on_partial(text: str):
-            """Called by streaming ASR when partial result available"""
+            """Called by streaming ASR when partial result available.
+            Create new segment if none active, update text, send to frontend.
+            """
+            if not self._result_callback:
+                return
+
+            # Create new segment if none active
+            if self._current_segment_id is None:
+                segment_id = str(int(asyncio.get_event_loop().time() * 1000))
+                self._current_segment_id = segment_id
+            else:
+                segment_id = self._current_segment_id
+
+            # Reset segment silence timer
+            if self._segment_silence_timer:
+                self._segment_silence_timer.cancel()
+
+            # Schedule new segment timeout
+            self._segment_silence_timer = asyncio.create_task(
+                self._segment_silence_timeout(segment_id, text)
+            )
+
+            # Send ongoing update to frontend for real-time display
             if self._result_callback:
-                # Send partial result immediately to frontend for real-time display
-                self._result_callback(UserTranscriptPartialMessage(text=text))
+                self._result_callback(UserTranscriptOngoingMessage(
+                    message_id=segment_id,
+                    text=text
+                ))
 
         # Only establish connection, don't send StartTranscription yet
         # StartTranscription will be sent when first audio chunk arrives
@@ -146,13 +178,40 @@ class StreamProcessor:
         """Called by streaming ASR when final result is available"""
         pass
 
+    async def _segment_silence_timeout(self, segment_id: str, final_text: str) -> None:
+        """Called after segment silence timeout - finish this segment.
+        Next speech will start a new bubble.
+        """
+        await asyncio.sleep(self._segment_timeout_ms / 1000)
+
+        # Save to finished segments
+        if final_text.strip():
+            self._finished_segments.append(final_text.strip())
+
+        # Notify frontend segment ended
+        if self._result_callback:
+            self._result_callback(UserTranscriptSegmentEndMessage(
+                message_id=segment_id
+            ))
+
+        # Clear current segment - next speech starts new bubble
+        self._current_segment_id = None
+
     async def _silence_timeout_process(self) -> None:
         """Called after silence timeout - process final result"""
         await asyncio.sleep(self._silence_timeout_ms / 1000)
 
         if not self.streaming_asr:
             return
-        final_text = self.streaming_asr.get_current_text().strip()
+
+        # Combine all finished segments + any current ongoing segment
+        final_parts = self._finished_segments.copy()
+        if self.streaming_asr:
+            current_text = self.streaming_asr.get_current_text().strip()
+            if current_text:
+                final_parts.append(current_text)
+
+        final_text = " ".join(final_parts).strip()
         if not final_text:
             return
 
@@ -177,11 +236,16 @@ class StreamProcessor:
         if self._silence_timer:
             self._silence_timer.cancel()
             self._silence_timer = None
+        if self._segment_silence_timer:
+            self._segment_silence_timer.cancel()
+            self._segment_silence_timer = None
         if self.streaming_asr:
             await self.streaming_asr.close()
             self.streaming_asr = None
-        # Clear pending buffer for next connection
+        # Clear pending buffer and segment state for next connection
         self._pending_audio_buffer.clear()
+        self._finished_segments.clear()
+        self._current_segment_id = None
 
     async def process_final_transcript(self, text: str) -> AsyncGenerator[ServerMessage, None]:
         """Process final user transcript with LLM and TTS"""

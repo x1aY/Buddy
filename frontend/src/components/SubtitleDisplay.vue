@@ -34,7 +34,7 @@ import { ConversationMessage } from '@seeworldweb/shared/src/types';
 interface Props {
   messages: ConversationMessage[];
   cameraEnabled: boolean;
-  partialText: string;
+  partialText?: string;
 }
 
 defineProps<Props>();

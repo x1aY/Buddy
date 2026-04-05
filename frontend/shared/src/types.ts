@@ -12,7 +12,9 @@ export type ClientMessage =
 // Server -> Client messages
 export type ServerMessage =
   | { type: 'user_transcript'; text: string } // ASR final result for user
-  | { type: 'user_transcript_partial'; text: string } // Partial ASR result (streaming)
+  | { type: 'user_transcript_partial'; text: string } // Partial ASR result (streaming) - deprecated
+  | { type: 'user_transcript_ongoing'; message_id: string; text: string } // Ongoing ASR segment (streaming bubble)
+  | { type: 'user_transcript_segment_end'; message_id: string } // ASR segment finished
   | { type: 'model_start'; sessionId: string } // Model starts responding
   | { type: 'model_token'; token: string } // Streaming token from model
   | { type: 'model_audio'; data: string } // base64 encoded TTS audio
