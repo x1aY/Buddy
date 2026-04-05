@@ -58,7 +58,6 @@
             <SubtitleDisplay
               :messages="conversationMessages"
               :camera-enabled="cameraEnabled"
-              :partial-text="partialUserTranscript"
             />
           </div>
         </transition>
@@ -133,7 +132,6 @@ const token = authStore.token;
 const isSubtitleEnabled = ref(DEFAULT_SUBTITLE_ENABLED);
 const conversationMessages = ref<ConversationMessage[]>([]);
 const currentModelMessage = ref('');
-const partialUserTranscript = ref('');
 const isPlayingAudio = ref(false);
 
 // Derived AI orb state based on current conversation status
@@ -142,8 +140,11 @@ const aiOrbState = computed<AIOrbState>(() => {
     return "listening";
   }
 
-  // If we have a partial transcript, we're listening
-  if (partialUserTranscript.value) {
+  // If we have any ongoing user message being transcribed, we're listening
+  const hasOngoingTranscript = conversationMessages.value.some(
+    m => m.role === 'user' && Date.now() - m.timestamp < 2000
+  );
+  if (hasOngoingTranscript) {
     return "listening";
   }
 
@@ -208,13 +209,37 @@ onMounted(() => {
 
 function handleServerMessage(message: ServerMessage) {
   switch (message.type) {
+    case 'user_transcript_ongoing':
+      // Real-time update of ongoing segment in conversation list
+      const { message_id, text } = message;
+      // Find if this segment already exists
+      const existingIndex = conversationMessages.value.findIndex(
+        m => m.id === message_id
+      );
+      if (existingIndex >= 0) {
+        // Update existing bubble
+        conversationMessages.value[existingIndex].text = text;
+      } else {
+        // Add new bubble for new segment
+        conversationMessages.value.push({
+          id: message_id,
+          role: 'user',
+          text: text,
+          timestamp: Date.now()
+        });
+      }
+      break;
+
+    case 'user_transcript_segment_end':
+      // Nothing to do - segment already ended, next will be new bubble
+      break;
+
     case 'user_transcript_partial':
-      // Real-time update of partial user transcript
-      partialUserTranscript.value = message.text || '';
+      // Deprecated - keep for backward compatibility temporarily
       break;
 
     case 'user_transcript':
-      // Final user transcript - add to conversation, clear partial
+      // Final user transcript - add to conversation
       if (message.text === undefined) {
         break;
       }
@@ -224,7 +249,6 @@ function handleServerMessage(message: ServerMessage) {
         text: message.text,
         timestamp: Date.now()
       });
-      partialUserTranscript.value = '';
       currentModelMessage.value = '';
       break;
 
