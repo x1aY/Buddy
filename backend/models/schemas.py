@@ -82,6 +82,17 @@ class UserTranscriptPartialMessage(BaseModel):
     text: str  # 部分识别结果（流式更新）
 
 
+class UserTranscriptOngoingMessage(BaseModel):
+    type: Literal['user_transcript_ongoing'] = 'user_transcript_ongoing'
+    message_id: str  # 当前分段唯一ID
+    text: str        # 当前分段完整识别文本
+
+
+class UserTranscriptSegmentEndMessage(BaseModel):
+    type: Literal['user_transcript_segment_end'] = 'user_transcript_segment_end'
+    message_id: str  # 结束的分段ID
+
+
 class ModelStartMessage(BaseModel):
     type: Literal['model_start'] = 'model_start'
     sessionId: str
@@ -113,6 +124,8 @@ class ErrorMessage(BaseModel):
 ServerMessage = Union[
     UserTranscriptMessage,
     UserTranscriptPartialMessage,
+    UserTranscriptOngoingMessage,
+    UserTranscriptSegmentEndMessage,
     ModelStartMessage,
     ModelTokenMessage,
     ModelAudioMessage,
