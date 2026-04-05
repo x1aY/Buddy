@@ -82,6 +82,8 @@ class StreamProcessor:
 
     def toggle_camera(self, enabled: bool) -> None:
         self.camera_enabled = enabled
+        if not enabled:
+            self.latest_camera_frame = None
 
     def toggle_subtitle(self, enabled: bool) -> None:
         self.subtitle_enabled = enabled
