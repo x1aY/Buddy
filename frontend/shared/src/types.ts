@@ -7,6 +7,7 @@ export type ClientMessage =
   | { type: 'toggle_audio'; enabled: boolean }
   | { type: 'toggle_camera'; enabled: boolean }
   | { type: 'toggle_subtitle'; enabled: boolean }
+  | { type: 'user_transcript'; text: string } // text input from user
   | { type: 'ping' };
 
 // Server -> Client messages

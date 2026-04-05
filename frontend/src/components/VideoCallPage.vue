@@ -8,108 +8,127 @@
       ></div>
     </div>
 
-    <!-- 摄像头预览 -->
+    <!-- 摄像头预览 - 铺满整个背景 -->
     <transition name="fade">
-      <CameraPreview v-if="cameraEnabled" :stream="cameraStream" />
+      <div v-if="cameraEnabled" class="absolute inset-0 z-0">
+        <CameraPreview :stream="cameraStream" />
+      </div>
     </transition>
 
-    <!-- 主内容区 -->
-    <div class="relative z-10 h-screen flex flex-col">
-      <!-- 字幕开关按钮 -->
-      <div class="absolute top-6 right-6">
-        <button
-          @click="toggleSubtitle"
-          :class="[
-            'btn-toggle-sm',
-            isSubtitleEnabled
-              ? 'bg-amber-500 text-white'
-              : 'btn-toggle-inactive'
-          ]"
-        >
-          <Subtitles class="w-5 h-5" />
-          字幕{{ isSubtitleEnabled ? '开启' : '关闭' }}
-        </button>
-      </div>
+    <!-- 角落按钮 -->
+    <!-- 左上角：字幕开关 -->
+    <div class="absolute top-4 left-4 z-20">
+      <button
+        @click="toggleSubtitle"
+        class="bg-black/60 hover:bg-black/70 text-white px-5 py-3 rounded-full font-medium transition-all duration-200 flex items-center gap-2 backdrop-blur-md"
+      >
+        <Subtitles class="w-5 h-5" />
+        字幕
+      </button>
+    </div>
 
-      <!-- 中心内容区域 -->
-      <div class="flex-1 flex items-start justify-center p-6 pt-16">
-        <transition mode="out-in">
-          <!-- AI悬浮球 -->
+    <!-- 右上角：退出登录 -->
+    <div class="absolute top-4 right-4 z-20">
+      <button
+        @click="handleLogout"
+        class="bg-red-600/95 hover:bg-red-700 text-white px-5 py-3 rounded-full font-medium transition-all duration-200 flex items-center gap-2 backdrop-blur-md"
+      >
+        <LogOut class="w-5 h-5" />
+        退出登录
+      </button>
+    </div>
+
+    <!-- 对话内容区域 - 铺满主体 (仅当字幕开启时显示) -->
+    <div
+      v-if="isSubtitleEnabled"
+      class="absolute inset-[100px_16px_110px_16px] bg-black/5 rounded-2xl backdrop-blur-sm z-10 flex flex-col"
+    >
+      <!-- 对话历史 - 可滚动 -->
+      <div ref="messagesContainer" class="flex-1 overflow-y-auto p-4">
+        <div class="flex flex-col gap-3">
           <div
-            v-if="!isSubtitleEnabled"
-            key="orb"
-            class="text-center flex flex-col items-center justify-center h-full"
+            v-for="message in conversationMessages"
+            :key="message.id"
+            :class="[
+              'max-w-[70%]',
+              message.role === 'model' ? 'self-start' : 'self-end'
+            ]"
           >
-            <AIOrb :state="aiOrbState" />
-            <p
-              class="mt-16 text-lg"
-              :class="cameraEnabled ? 'text-white/90' : 'text-gray-400'"
+            <div
+              :class="[
+                'px-4 py-3 rounded-2xl',
+                message.role === 'model'
+                  ? 'bg-blue-500/30 text-white rounded-tl-sm'
+                  : 'bg-green-500/30 text-white rounded-tr-sm'
+              ]"
             >
-              点击麦克风开始对话
-            </p>
+              {{ message.text }}
+            </div>
           </div>
-
-          <!-- 对话字幕区域 -->
-          <div
-            v-else
-            key="subtitles"
-            class="w-full max-w-4xl max-h-[60vh] overflow-y-auto px-4"
-          >
-            <SubtitleDisplay
-              :messages="conversationMessages"
-              :camera-enabled="cameraEnabled"
-            />
-          </div>
-        </transition>
+        </div>
       </div>
 
-      <!-- 底部控制栏 -->
-      <div class="p-6 flex justify-center items-center gap-4">
-        <!-- 麦克风按钮 -->
-        <button
-          @click="toggleAudio"
-          :class="[
-            'px-8 py-4 rounded-full font-medium shadow-xl transition-all duration-200 flex items-center gap-3 hover:scale-[1.05] active:scale-[0.95]',
-            isAudioEnabled
-              ? 'bg-green-500 text-white'
-              : 'bg-gray-700/80 text-gray-300 backdrop-blur-sm'
-          ]"
-        >
-          <Mic v-if="isAudioEnabled" class="w-5 h-5" />
-          <MicOff v-else class="w-5 h-5" />
-          声音{{ isAudioEnabled ? '开启' : '关闭' }}
-        </button>
-
-        <!-- 摄像头按钮 -->
-        <button
-          @click="toggleCamera"
-          :class="[
-            'px-8 py-4 rounded-full font-medium shadow-xl transition-all duration-200 flex items-center gap-3 hover:scale-[1.05] active:scale-[0.95]',
-            cameraEnabled
-              ? 'bg-blue-500 text-white'
-              : 'bg-gray-700/80 text-gray-300 backdrop-blur-sm'
-          ]"
-        >
-          <Video v-if="cameraEnabled" class="w-5 h-5" />
-          <VideoOff v-else class="w-5 h-5" />
-          摄像头{{ cameraEnabled ? '开启' : '关闭' }}
-        </button>
-
-        <!-- 退出登录按钮 -->
-        <button
-          @click="handleLogout"
-          class="px-8 py-4 bg-red-600 hover:bg-red-700 text-white rounded-full font-medium shadow-xl transition-all duration-200 flex items-center gap-3 hover:scale-[1.05] active:scale-[0.95]"
-        >
-          <LogOut class="w-5 h-5" />
-          退出登录
-        </button>
+      <!-- 状态提示条 -->
+      <div class="p-3">
+        <div class="py-2 px-4 text-center text-white/90">
+          {{ statusText }}
+        </div>
       </div>
+    </div>
+
+    <!-- 底部控制栏 -->
+    <div class="absolute bottom-6 left-6 right-6 z-20 flex items-center gap-3">
+      <!-- 麦克风按钮 -->
+      <button
+        @click="toggleAudio"
+        :class="[
+          'w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-[1.05] active:scale-[0.95] backdrop-blur-md',
+          isAudioEnabled
+            ? 'bg-green-600/95 text-white'
+            : 'bg-gray-700/95 text-gray-200'
+        ]"
+      >
+        <Mic v-if="isAudioEnabled" class="w-6 h-6" />
+        <MicOff v-else class="w-6 h-6" />
+      </button>
+
+      <!-- 输入框 -->
+      <div class="flex-1">
+        <input
+          v-model="userInputText"
+          @keyup.enter="sendUserInput"
+          placeholder="输入对话..."
+          class="w-full bg-white/92 text-gray-800 px-5 py-3 rounded-full outline-none placeholder:text-gray-500 backdrop-blur-md"
+        />
+      </div>
+
+      <!-- 发送按钮 -->
+      <button
+        @click="sendUserInput"
+        class="bg-blue-600/95 hover:bg-blue-700 text-white px-5 py-3 rounded-full font-medium transition-all duration-200 backdrop-blur-md"
+      >
+        发送
+      </button>
+
+      <!-- 摄像头按钮 -->
+      <button
+        @click="toggleCamera"
+        :class="[
+          'w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-[1.05] active:scale-[0.95] backdrop-blur-md',
+          cameraEnabled
+            ? 'bg-blue-600/95 text-white'
+            : 'bg-gray-700/95 text-gray-200'
+        ]"
+      >
+        <Video v-if="cameraEnabled" class="w-6 h-6" />
+        <VideoOff v-else class="w-6 h-6" />
+      </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch, nextTick } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useRouter } from 'vue-router';
 import { useWebSocketClient } from '@/composables/use-websocket-client';
@@ -118,11 +137,7 @@ import { useCameraCapture } from '@/composables/use-camera-capture';
 import { ConversationMessage, ServerMessage } from '@seeworldweb/shared/src/types';
 import { DEFAULT_SUBTITLE_ENABLED } from '@seeworldweb/shared/src/constants';
 import { Mic, MicOff, Video, VideoOff, LogOut, Subtitles } from 'lucide-vue-next';
-import AIOrb from './AIOrb.vue';
-import SubtitleDisplay from './SubtitleDisplay.vue';
 import CameraPreview from './CameraPreview.vue';
-
-type AIOrbState = "listening" | "thinking" | "speaking";
 
 const authStore = useAuthStore();
 const router = useRouter();
@@ -133,41 +148,58 @@ const isSubtitleEnabled = ref(DEFAULT_SUBTITLE_ENABLED);
 const conversationMessages = ref<ConversationMessage[]>([]);
 const currentModelMessage = ref('');
 const isPlayingAudio = ref(false);
+const userInputText = ref('');
+const messagesContainer = ref<HTMLDivElement | null>(null);
 
-// Derived AI orb state based on current conversation status
-const aiOrbState = computed<AIOrbState>(() => {
-  if (!isAudioEnabled.value) {
-    return "listening";
+// Track if there's an ongoing transcript (updated when messages change)
+const hasOngoingTranscript = computed(() => {
+  return conversationMessages.value.some(
+    m => m.role === 'user' && Date.now() - m.timestamp < 2000
+  );
+});
+
+// Auto-scroll to bottom when messages change
+const scrollToBottom = () => {
+  nextTick(() => {
+    if (messagesContainer.value) {
+      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
+    }
+  });
+};
+
+watch(() => conversationMessages.value.length, scrollToBottom);
+
+// 计算状态提示文字
+const statusText = computed(() => {
+  if (!isConnected.value) {
+    return '未连接';
+  }
+
+  if (conversationMessages.value.length === 0 && !isAudioEnabled.value) {
+    return '问问我';
   }
 
   // If we have any ongoing user message being transcribed, we're listening
-  const hasOngoingTranscript = conversationMessages.value.some(
-    m => m.role === 'user' && Date.now() - m.timestamp < 2000
-  );
-  if (hasOngoingTranscript) {
-    return "listening";
+  if (hasOngoingTranscript.value && isAudioEnabled.value) {
+    return '正在听';
   }
 
-  // If we're playing audio, we're speaking
-  if (isPlayingAudio.value) {
-    return "speaking";
-  }
-
-  // If currentModelMessage is being built, we're thinking
+  // If currentModelMessage is being built, we're thinking/generating
   if (currentModelMessage.value && conversationMessages.value.length > 0 &&
       conversationMessages.value[conversationMessages.value.length - 1].role === 'model') {
-    // Still getting tokens - thinking
     if (currentModelMessage.value !== conversationMessages.value[conversationMessages.value.length - 1].text) {
-      return "thinking";
-    } else {
-      // Done generating, playing audio - speaking
-      return "speaking";
+      return '正在生成回复';
     }
   } else if (currentModelMessage.value) {
-    return "thinking";
-  } else {
-    return "listening";
+    return '思考中';
   }
+
+  if (isPlayingAudio.value) {
+    return '正在生成回复';
+  }
+
+  // Default
+  return '问问我';
 });
 
 // Composables
@@ -199,7 +231,7 @@ const cameraToggle = async () => {
 
 onMounted(() => {
   // Connect WebSocket
-  const socket = connect();
+  connect();
   onMessage(handleServerMessage);
   // Initialize camera stream if enabled
   if (cameraEnabled.value) {
@@ -328,6 +360,26 @@ function toggleSubtitle() {
     type: 'toggle_subtitle',
     enabled: isSubtitleEnabled.value
   });
+}
+
+function sendUserInput() {
+  const text = userInputText.value.trim();
+  if (!text) return;
+
+  conversationMessages.value.push({
+    id: Date.now().toString() + '-user',
+    role: 'user',
+    text: text,
+    timestamp: Date.now()
+  });
+  currentModelMessage.value = '';
+
+  send({
+    type: 'user_transcript',
+    text: text
+  });
+
+  userInputText.value = '';
 }
 
 function handleLogout() {

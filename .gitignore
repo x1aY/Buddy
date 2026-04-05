@@ -35,6 +35,7 @@ lerna-debug.log*
 
 # Claude
 .claude/
+.superpowers/
 
 # OS
 .DS_Store
