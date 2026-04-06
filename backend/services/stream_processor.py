@@ -53,19 +53,18 @@ class StreamProcessor:
 
         # Streaming ASR
         self.streaming_asr: Optional[StreamingASRService] = None
-        self._silence_timer: Optional[asyncio.Task] = None
-        self._silence_timeout_ms = 4000  # 4 seconds silence = end of speech (longer than segment timeout)
         # Buffer for audio chunks arrived before ASR connects
         self._pending_audio_buffer: list[bytes] = []
 
-        # Streaming ASR segmentation - multiple bubble support
-        # Each bubble = one segment, new bubble after silence timeout
+        # ASR keeps running continuously, single silence timeout after user stops speaking
+        # All recognized text is accumulated and sent to LLM once after silence timeout
+        # Still keeps multiple ongoing bubbles with real-time updates (蹦字 effect)
         self._current_segment_id: Optional[str] = None
-        self._current_segment_sentences: list[str] = []  # Sentences completed by ALiyun in current bubble
-        self._current_segment_ongoing: str = ""          # Ongoing sentence in current bubble
-        self._segment_silence_timer: Optional[asyncio.Task] = None
-        self._segment_timeout_ms: int = 1500  # 1500ms = trigger LLM after 1.5s of silence
-        self._finished_segments: list[str] = []  # Completed full segments (each is one bubble) - combined when LLM timeout triggers
+        self._current_segment_sentences: list[str] = []  # Sentences completed by ALiyun in current segment
+        self._current_segment_ongoing: str = ""          # Ongoing sentence in current segment
+        self._silence_timer: Optional[asyncio.Task] = None
+        self._silence_timer_id: int = 0  # Sequence number for current active timer
+        self._silence_timeout_ms = 3000  # 3000ms = trigger LLM after 3s of silence (user finished speaking)
 
     def handle_ping(self) -> PongMessage:
         return PongMessage()
@@ -82,6 +81,8 @@ class StreamProcessor:
 
     def toggle_camera(self, enabled: bool) -> None:
         self.camera_enabled = enabled
+        if not enabled:
+            self.latest_camera_frame = None
 
     def toggle_subtitle(self, enabled: bool) -> None:
         self.subtitle_enabled = enabled
@@ -130,7 +131,8 @@ class StreamProcessor:
             self._silence_timer.cancel()
 
         # Schedule a new timer - after timeout, process final result
-        self._silence_timer = asyncio.create_task(self._silence_timeout_process())
+        self._silence_timer_id += 1
+        self._silence_timer = asyncio.create_task(self._silence_timeout_process(self._silence_timer_id))
 
         # Yield nothing now - partial results come from streaming ASR callbacks
         # The yield below ensures this is recognized as an async generator
@@ -168,21 +170,22 @@ class StreamProcessor:
                 # ALiyun gives us updated text for the ongoing sentence
                 self._current_segment_ongoing = text
 
-            # Cancel existing timeout - we got new speech
-            if self._segment_silence_timer:
-                self._segment_silence_timer.cancel()
+            # Cancel existing silence timeout - we got new speech, reset timer
+            if self._silence_timer:
+                self._silence_timer.cancel()
 
             # Combine all completed sentences + current ongoing for frontend display
             full_current_text = " ".join(
                 self._current_segment_sentences + [self._current_segment_ongoing]
             ).strip()
 
-            # Schedule new segment timeout
-            self._segment_silence_timer = asyncio.create_task(
-                self._segment_silence_timeout(segment_id, full_current_text)
+            # Schedule new silence timeout - after 3s of silence, trigger LLM processing
+            self._silence_timer_id += 1
+            self._silence_timer = asyncio.create_task(
+                self._silence_timeout_process(self._silence_timer_id)
             )
 
-            # Send ongoing update to frontend for real-time display
+            # Send ongoing update to frontend for real-time display (keeps蹦字 effect)
             if self._result_callback:
                 self._result_callback(UserTranscriptOngoingMessage(
                     message_id=segment_id,
@@ -204,85 +207,36 @@ class StreamProcessor:
             return
         if final_text.strip() and self._current_segment_id is not None:
             self._current_segment_sentences.append(final_text.strip())
+            # Clear ongoing after sentence end is finalized to avoid duplication
+            # Next sentence will start fresh in ongoing
+            self._current_segment_ongoing = ""
 
-    async def _segment_silence_timeout(self, segment_id: str, final_text: str) -> None:
-        """After silence timeout: finish current bubble, next speech starts new bubble."""
-        await asyncio.sleep(self._segment_timeout_ms / 1000)
 
-        # If this task was already canceled or we already have a new current segment, bail early
-        # This prevents race conditions where new speech arrives before sleep completes
-        # Also check if ASR is still active - if audio was toggled off/on, this is a stale task
-        if not self.streaming_asr or self._current_segment_id != segment_id:
-            logger.debug("segment_silence_timeout_stale_segment", expected=segment_id, current=self._current_segment_id)
+    async def _silence_timeout_process(self, timer_id: int) -> None:
+        """Called after silence timeout - process final result"""
+        await asyncio.sleep(self._silence_timeout_ms / 1000)
+
+        # After sleep, check if this timer is still the active one
+        # Multiple timers can be created due to continuous audio input, only the last one should proceed
+        if timer_id != self._silence_timer_id:
+            # This timer is outdated, skip
+            logger.info("silence_timeout_skip_outdated", timer_id=timer_id, active_id=self._silence_timer_id)
             return
 
-        if final_text.strip():
-            self._finished_segments.append(final_text.strip())
-
-        if self._result_callback:
-            self._result_callback(UserTranscriptSegmentEndMessage(
-                message_id=segment_id
-            ))
-
-        self._current_segment_id = None
-        self._current_segment_sentences.clear()
-        self._current_segment_ongoing = ""
-
-        # If we have finished segments and silence is detected, trigger LLM processing
-        # This handles the case where each bubble is a complete question
-        if len(self._finished_segments) > 0 and self.streaming_asr is not None:
-            logger.info("segment_silence_trigger_llm_processing", segments=len(self._finished_segments))
-            # Check if LLM is already processing (avoid concurrent processing)
-            if self._processing_lock.locked():
-                logger.info("segment_silence_skip_already_processing")
-                return
-            # Combine all finished segments and process immediately
-            final_parts = self._finished_segments.copy()
-            # Clear immediately after copying - prevent duplication if exception occurs later
-            self._finished_segments.clear()
-            current_text = ""
-            if self.streaming_asr:
-                current_text = self.streaming_asr.get_current_text().strip()
-                if current_text:
-                    final_parts.append(current_text)
-            final_text = " ".join(final_parts).strip()
-            if final_text and self._result_callback:
-                logger.info("segment_silence_processing_final_text", length=len(final_text))
-                # We are already in the segment timeout task - clear reference so _stop_streaming_asr doesn't cancel us
-                self._segment_silence_timer = None
-                # Stop streaming ASR before processing
-                await self._stop_streaming_asr()
-                # Do NOT send UserTranscriptMessage again - text already displayed via user_transcript_ongoing
-                # Process with LLM
-                async for msg in self.process_final_transcript(final_text):
-                    self._result_callback(msg)
-                await self._restart_asr_if_enabled()
-
-    async def _silence_timeout_process(self) -> None:
-        """Called after silence timeout - process final result"""
-        logger.info("silence_timeout_triggered")
-        await asyncio.sleep(self._silence_timeout_ms / 1000)
+        logger.info("silence_timeout_triggered", timer_id=timer_id)
 
         if not self.streaming_asr:
             logger.info("silence_timeout_skip_no_streaming_asr")
             return
 
-        # If we already have processed segments via segment_silence_timeout,
-        # _finished_segments will be empty - no need to process again
-        if len(self._finished_segments) == 0 and self._current_segment_id is None:
-            logger.info("silence_timeout_skip_already_processed")
-            return
-
-        # Combine all finished segments + any current ongoing segment
-        final_parts = self._finished_segments.copy()
-        # Clear immediately after copying - prevent duplication if exception occurs later
-        self._finished_segments.clear()
-        logger.info("silence_timeout_segments", finished_count=len(final_parts))
-        if self.streaming_asr:
-            current_text = self.streaming_asr.get_current_text().strip()
-            logger.info("silence_timeout_current_text", length=len(current_text), text=current_text[:100])
-            if current_text:
-                final_parts.append(current_text)
+        # Combine all completed sentences + current ongoing segment
+        final_parts: list[str] = []
+        # Add all completed sentences from ASR
+        if self._current_segment_sentences:
+            final_parts.extend(self._current_segment_sentences)
+        # Add current ongoing text
+        if self._current_segment_ongoing.strip():
+            final_parts.append(self._current_segment_ongoing.strip())
 
         final_text = " ".join(final_parts).strip()
         logger.info("silence_timeout_final_text", length=len(final_text), text=final_text[:100])
@@ -290,10 +244,21 @@ class StreamProcessor:
             logger.info("silence_timeout_skip_empty_text")
             return
 
+        # Check if LLM is already processing (avoid concurrent processing)
+        if self._processing_lock.locked():
+            logger.info("silence_timeout_skip_already_processing")
+            return
+
+        # Clear segment state before stopping ASR - we've already combined the final text
+        # This prevents _stop_streaming_asr from sending a duplicate UserTranscriptMessage
+        self._current_segment_sentences.clear()
+        self._current_segment_ongoing = ""
+        self._current_segment_id = None
+
         # Stop streaming ASR for this utterance
         await self._stop_streaming_asr()
 
-        # Send final transcript
+        # Send final transcript to frontend so it can save to backend
         if self._result_callback:
             self._result_callback(UserTranscriptMessage(text=final_text))
 
@@ -310,21 +275,54 @@ class StreamProcessor:
 
     async def _stop_streaming_asr(self) -> None:
         """Stop current streaming ASR session"""
+        # Before stopping, process any completed sentences and ongoing text
+        # This handles case where user manually toggles off microphone before timeout
+        if self._result_callback and (self._current_segment_sentences or self._current_segment_ongoing.strip()):
+            final_parts: list[str] = []
+            # Add all completed sentences
+            if self._current_segment_sentences:
+                final_parts.extend(self._current_segment_sentences)
+            # Add current ongoing text
+            # Priority: use our accumulated ongoing text first (already synced with ASR callbacks)
+            # Only fall back to ASR get_current_text if our accumulated is empty
+            current_text = self._current_segment_ongoing.strip()
+            if not current_text and self.streaming_asr:
+                current_text = self.streaming_asr.get_current_text().strip()
+            if current_text:
+                final_parts.append(current_text)
+            final_text = " ".join(final_parts).strip()
+            if final_text and self._result_callback:
+                # Send final transcript to frontend
+                self._result_callback(UserTranscriptMessage(text=final_text))
+                # Process with LLM - just like silence timeout after manual stop
+                logger.info("starting_llm_processing_manual_stop", final_text_length=len(final_text))
+                asyncio.create_task(self._process_final_after_manual_stop(final_text))
+
         if self._silence_timer:
             self._silence_timer.cancel()
             self._silence_timer = None
-        if self._segment_silence_timer:
-            self._segment_silence_timer.cancel()
-            self._segment_silence_timer = None
+            self._silence_timer_id = 0
         if self.streaming_asr:
             await self.streaming_asr.close()
             self.streaming_asr = None
         # Clear pending buffer and segment state for next connection
         self._pending_audio_buffer.clear()
-        self._finished_segments.clear()
         self._current_segment_id = None
         self._current_segment_sentences.clear()
         self._current_segment_ongoing = ""
+
+    async def _process_final_after_manual_stop(self, final_text: str) -> None:
+        """Process final transcript after manual microphone stop.
+        Similar to what happens after silence timeout.
+        """
+        # Already holding processing lock? Wait for it
+        async with self._processing_lock:
+            # Process the final result with LLM and send all responses
+            async for msg in self.process_final_transcript(final_text):
+                if self._result_callback:
+                    self._result_callback(msg)
+        # Restart ASR if audio is still enabled
+        await self._restart_asr_if_enabled()
 
     async def _restart_asr_if_enabled(self) -> None:
         """Restart streaming ASR after LLM processing if audio is still enabled.
