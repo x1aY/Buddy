@@ -37,6 +37,7 @@ class StreamProcessor:
     """Process incoming media stream and handle conversation"""
 
     # Silence timeout - if no audio for this many milliseconds, finish recognition
+    SILENCE_TIMEOUT_MS = 1500  # 1500ms = trigger LLM after 1.5s of silence (user finished speaking)
 
     def __init__(self):
         # Reuse singleton service instances
@@ -64,7 +65,7 @@ class StreamProcessor:
         self._current_segment_ongoing: str = ""          # Ongoing sentence in current segment
         self._silence_timer: Optional[asyncio.Task] = None
         self._silence_timer_id: int = 0  # Sequence number for current active timer
-        self._silence_timeout_ms = 3000  # 3000ms = trigger LLM after 3s of silence (user finished speaking)
+        self._silence_timeout_ms = self.SILENCE_TIMEOUT_MS
 
     def handle_ping(self) -> PongMessage:
         return PongMessage()
@@ -126,14 +127,6 @@ class StreamProcessor:
             # Transcription already started - send immediately
             await self.streaming_asr.send_audio_chunk(audio_data)
 
-        # Reset the silence timer - if we don't get more audio for timeout, we stop
-        if self._silence_timer:
-            self._silence_timer.cancel()
-
-        # Schedule a new timer - after timeout, process final result
-        self._silence_timer_id += 1
-        self._silence_timer = asyncio.create_task(self._silence_timeout_process(self._silence_timer_id))
-
         # Yield nothing now - partial results come from streaming ASR callbacks
         # The yield below ensures this is recognized as an async generator
         if False:
@@ -179,7 +172,7 @@ class StreamProcessor:
                 self._current_segment_sentences + [self._current_segment_ongoing]
             ).strip()
 
-            # Schedule new silence timeout - after 3s of silence, trigger LLM processing
+            # Schedule new silence timeout - after silence timeout, trigger LLM processing
             self._silence_timer_id += 1
             self._silence_timer = asyncio.create_task(
                 self._silence_timeout_process(self._silence_timer_id)
@@ -210,7 +203,6 @@ class StreamProcessor:
             # Clear ongoing after sentence end is finalized to avoid duplication
             # Next sentence will start fresh in ongoing
             self._current_segment_ongoing = ""
-
 
     async def _silence_timeout_process(self, timer_id: int) -> None:
         """Called after silence timeout - process final result"""
@@ -255,6 +247,11 @@ class StreamProcessor:
         self._current_segment_ongoing = ""
         self._current_segment_id = None
 
+        # Clear the silence timer reference before stopping ASR
+        # We don't want _stop_streaming_asr to cancel us (the currently running timeout task)
+        self._silence_timer = None
+        self._silence_timer_id = 0
+
         # Stop streaming ASR for this utterance
         await self._stop_streaming_asr()
 
@@ -277,6 +274,8 @@ class StreamProcessor:
         """Stop current streaming ASR session"""
         # Before stopping, process any completed sentences and ongoing text
         # This handles case where user manually toggles off microphone before timeout
+        # Collect text first, CLEAR STATE IMMEDIATELY to prevent duplicate sends if called again before we finish
+        final_text: Optional[str] = None
         if self._result_callback and (self._current_segment_sentences or self._current_segment_ongoing.strip()):
             final_parts: list[str] = []
             # Add all completed sentences
@@ -291,13 +290,8 @@ class StreamProcessor:
             if current_text:
                 final_parts.append(current_text)
             final_text = " ".join(final_parts).strip()
-            if final_text and self._result_callback:
-                # Send final transcript to frontend
-                self._result_callback(UserTranscriptMessage(text=final_text))
-                # Process with LLM - just like silence timeout after manual stop
-                logger.info("starting_llm_processing_manual_stop", final_text_length=len(final_text))
-                asyncio.create_task(self._process_final_after_manual_stop(final_text))
 
+        # Clear segment state immediately after collecting - prevents duplicate sends
         if self._silence_timer:
             self._silence_timer.cancel()
             self._silence_timer = None
@@ -310,6 +304,15 @@ class StreamProcessor:
         self._current_segment_id = None
         self._current_segment_sentences.clear()
         self._current_segment_ongoing = ""
+
+        # Now send after state is cleared - if _stop_streaming_asr is called again concurrently,
+        # state is already empty so no duplicate messages will be sent
+        if final_text and self._result_callback:
+            # Send final transcript to frontend
+            self._result_callback(UserTranscriptMessage(text=final_text))
+            # Process with LLM - just like silence timeout after manual stop
+            logger.info("starting_llm_processing_manual_stop", final_text_length=len(final_text))
+            asyncio.create_task(self._process_final_after_manual_stop(final_text))
 
     async def _process_final_after_manual_stop(self, final_text: str) -> None:
         """Process final transcript after manual microphone stop.
@@ -359,6 +362,14 @@ class StreamProcessor:
             llm_messages = self._build_llm_messages()
             session_id = str(int(asyncio.get_event_loop().time() * 1000))
             logger.info("llm_messages_built", count=len(llm_messages), session_id=session_id)
+            # Log all messages that will be sent to LLM
+            for i, msg in enumerate(llm_messages):
+                if isinstance(msg.content, list):
+                    # Has image content, just log text part
+                    text_parts = [part["text"] for part in msg.content if part["type"] == "text"]
+                    logger.info("llm_message", index=i, role=msg.role, content=" ".join(text_parts)[:500])
+                else:
+                    logger.info("llm_message", index=i, role=msg.role, content=str(msg.content)[:500])
 
             yield ModelStartMessage(sessionId=session_id)
 

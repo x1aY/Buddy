@@ -54,7 +54,7 @@
                 <div>
                   <div class="flex items-center gap-2">
                     <span>●</span>
-                    <span class="font-medium">当前对话</span>
+                    <span>当前对话</span>
                   </div>
                   <div
                     v-if="currentConversationTitle"
@@ -320,6 +320,9 @@ const switchConversation = async (conversationId: string) => {
 
     currentConversationId.value = conversationId;
     historyDropdownOpen.value = false;
+
+    // Set the conversation as active on the backend so it persists after refresh
+    await ConversationApi.setConversationActive(conversationId);
   } catch (err) {
     console.error('Failed to switch conversation:', err);
     alert('加载对话失败，请重试');
@@ -385,10 +388,13 @@ const initializeConversation = async () => {
 };
 
 // Track if there's an ongoing transcript (updated when messages change)
+// Only check last message - ongoing transcript must be the most recent
 const hasOngoingTranscript = computed(() => {
-  return conversationMessages.value.some(
-    m => m.role === 'user' && Date.now() - m.timestamp < 2000
-  );
+  if (conversationMessages.value.length === 0) {
+    return false;
+  }
+  const lastMessage = conversationMessages.value[conversationMessages.value.length - 1];
+  return lastMessage.role === 'user' && Date.now() - lastMessage.timestamp < 2000;
 });
 
 // Auto-scroll to bottom when messages change
@@ -460,13 +466,6 @@ const { toggle: audioToggle, isEnabled: isAudioEnabled } = useAudioCapture((chun
 // Get camera stream for preview
 const cameraStream = ref<MediaStream | null>(null);
 
-// Wrap camera toggle to update stream reference
-const cameraToggle = async () => {
-  const newState = await originalCameraToggle();
-  cameraStream.value = newState ? getVideoStream() : null;
-  return newState;
-};
-
 onMounted(() => {
   // Connect WebSocket
   connect();
@@ -522,12 +521,18 @@ function handleServerMessage(message: ServerMessage) {
         break;
       }
       const userMessageId = Date.now().toString() + '-user';
+
       // Check if this is already in the list from ongoing updates
       // Ongoing updates use numeric message IDs (segment timestamps)
-      // All user messages that came from ongoing streaming are still at the end
-      const existingIndexFinal = conversationMessages.value.findIndex(
-        m => !isNaN(Number(m.id)) || m.id.startsWith('message-') || m.id === userMessageId
-      );
+      // All user messages that came from ongoing streaming are always at the end
+      let existingIndexFinal = -1;
+      if (conversationMessages.value.length > 0) {
+        const lastMessage = conversationMessages.value[conversationMessages.value.length - 1];
+        if (!isNaN(Number(lastMessage.id)) || lastMessage.id.startsWith('message-') || lastMessage.id === userMessageId) {
+          existingIndexFinal = conversationMessages.value.length - 1;
+        }
+      }
+
       if (existingIndexFinal >= 0) {
         // Update existing bubble from streaming
         conversationMessages.value[existingIndexFinal].text = message.text;
@@ -634,7 +639,7 @@ async function toggleAudio() {
 }
 
 async function toggleCamera() {
-  const newState = await cameraToggle();
+  const newState = await originalCameraToggle();
   cameraStream.value = newState ? getVideoStream() : null;
   send({
     type: 'toggle_camera',

@@ -265,3 +265,30 @@ def delete_conversation(
             )
 
     return DeleteConversationResponse(success=success)
+
+
+@router.put("/{conversation_id}/active", response_model=SuccessResponse)
+def set_conversation_active(
+    conversation_id: UUID,
+    user_id: str = Depends(get_user_id_from_token)
+) -> SuccessResponse:
+    """Set a conversation as the active one for the user.
+
+    Args:
+        conversation_id: Conversation UUID to set as active
+        user_id: Current authenticated user ID
+
+    Returns:
+        Success status
+    """
+    conv = get_conversation(conversation_id)
+    if conv is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    if conv.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to set this conversation as active")
+
+    # Set this as the active conversation
+    set_active_conversation(user_id, conversation_id)
+
+    return SuccessResponse(success=True)
