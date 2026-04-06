@@ -320,6 +320,9 @@ const switchConversation = async (conversationId: string) => {
 
     currentConversationId.value = conversationId;
     historyDropdownOpen.value = false;
+
+    // Set the conversation as active on the backend so it persists after refresh
+    await ConversationApi.setConversationActive(conversationId);
   } catch (err) {
     console.error('Failed to switch conversation:', err);
     alert('加载对话失败，请重试');
@@ -522,12 +525,18 @@ function handleServerMessage(message: ServerMessage) {
         break;
       }
       const userMessageId = Date.now().toString() + '-user';
+
       // Check if this is already in the list from ongoing updates
       // Ongoing updates use numeric message IDs (segment timestamps)
-      // All user messages that came from ongoing streaming are still at the end
-      const existingIndexFinal = conversationMessages.value.findIndex(
-        m => !isNaN(Number(m.id)) || m.id.startsWith('message-') || m.id === userMessageId
-      );
+      // All user messages that came from ongoing streaming are always at the end
+      let existingIndexFinal = -1;
+      if (conversationMessages.value.length > 0) {
+        const lastMessage = conversationMessages.value[conversationMessages.value.length - 1];
+        if (!isNaN(Number(lastMessage.id)) || lastMessage.id.startsWith('message-') || lastMessage.id === userMessageId) {
+          existingIndexFinal = conversationMessages.value.length - 1;
+        }
+      }
+
       if (existingIndexFinal >= 0) {
         // Update existing bubble from streaming
         conversationMessages.value[existingIndexFinal].text = message.text;

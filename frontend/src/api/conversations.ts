@@ -162,3 +162,17 @@ export async function deleteConversation(conversationId: string): Promise<Delete
   }
   return await response.json();
 }
+
+export async function setConversationActive(conversationId: string): Promise<SuccessResponse> {
+  /** Set a conversation as active for the current user */
+  const response = await fetch(`${API_BASE}/api/conversations/${conversationId}/active`, {
+    method: 'PUT',
+    headers: getAuthHeader(),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to set conversation as active: ${response.status}`);
+  }
+
+  return await response.json();
+}
