@@ -388,10 +388,13 @@ const initializeConversation = async () => {
 };
 
 // Track if there's an ongoing transcript (updated when messages change)
+// Only check last message - ongoing transcript must be the most recent
 const hasOngoingTranscript = computed(() => {
-  return conversationMessages.value.some(
-    m => m.role === 'user' && Date.now() - m.timestamp < 2000
-  );
+  if (conversationMessages.value.length === 0) {
+    return false;
+  }
+  const lastMessage = conversationMessages.value[conversationMessages.value.length - 1];
+  return lastMessage.role === 'user' && Date.now() - lastMessage.timestamp < 2000;
 });
 
 // Auto-scroll to bottom when messages change

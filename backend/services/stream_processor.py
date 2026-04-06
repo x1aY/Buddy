@@ -37,6 +37,7 @@ class StreamProcessor:
     """Process incoming media stream and handle conversation"""
 
     # Silence timeout - if no audio for this many milliseconds, finish recognition
+    SILENCE_TIMEOUT_MS = 1500  # 1500ms = trigger LLM after 1.5s of silence (user finished speaking)
 
     def __init__(self):
         # Reuse singleton service instances
@@ -64,7 +65,7 @@ class StreamProcessor:
         self._current_segment_ongoing: str = ""          # Ongoing sentence in current segment
         self._silence_timer: Optional[asyncio.Task] = None
         self._silence_timer_id: int = 0  # Sequence number for current active timer
-        self._silence_timeout_ms = 1500  # 1500ms = trigger LLM after 1.5s of silence (user finished speaking)
+        self._silence_timeout_ms = self.SILENCE_TIMEOUT_MS
 
     def handle_ping(self) -> PongMessage:
         return PongMessage()
@@ -367,9 +368,9 @@ class StreamProcessor:
                 if isinstance(msg.content, list):
                     # Has image content, just log text part
                     text_parts = [part["text"] for part in msg.content if part["type"] == "text"]
-                    logger.info(f"llm_message_{i}_role_{msg.role}", content=" ".join(text_parts)[:500])
+                    logger.info("llm_message", index=i, role=msg.role, content=" ".join(text_parts)[:500])
                 else:
-                    logger.info(f"llm_message_{i}_role_{msg.role}", content=str(msg.content)[:500])
+                    logger.info("llm_message", index=i, role=msg.role, content=str(msg.content)[:500])
 
             yield ModelStartMessage(sessionId=session_id)
 
