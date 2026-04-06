@@ -6,6 +6,7 @@ from config import settings, __version__
 from utils.logger import setup_logging, get_logger
 from api.auth import router as auth_router
 from api.monitoring import router as monitoring_router
+from api.conversations import router as conversations_router
 from api.websocket import websocket_endpoint
 
 # Setup logging before app initialization
@@ -27,6 +28,7 @@ app.add_middleware(
 # Register routes
 app.include_router(auth_router)
 app.include_router(monitoring_router)
+app.include_router(conversations_router)
 app.add_api_websocket_route("/ws", websocket_endpoint)
 
 # Add Prometheus instrumentation - exclude health and metrics endpoints to avoid self-monitoring

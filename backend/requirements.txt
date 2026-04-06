@@ -18,3 +18,6 @@ structlog
 
 # Monitoring
 prometheus-fastapi-instrumentator
+
+# Vector Database
+chromadb
