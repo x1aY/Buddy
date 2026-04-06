@@ -22,7 +22,8 @@
         @click="toggleSubtitle"
         class="bg-white/10 hover:bg-white/20 text-white w-12 h-12 rounded-full font-medium transition-all duration-200 flex items-center justify-center backdrop-blur-md"
       >
-        <Subtitles class="w-5 h-5" />
+        <Captions v-if="isSubtitleEnabled" class="w-5 h-5" />
+        <CaptionsOff v-else class="w-5 h-5" />
       </button>
     </div>
 
@@ -122,7 +123,7 @@
     <!-- 对话内容区域 - 铺满主体 (仅当字幕开启时显示) -->
     <div
       v-if="isSubtitleEnabled"
-      class="absolute inset-[100px_16px_110px_16px] bg-black/5 rounded-2xl backdrop-blur-sm z-10 flex flex-col"
+      class="absolute inset-[100px_16px_150px_16px] bg-black/5 rounded-2xl backdrop-blur-sm z-10 flex flex-col"
     >
       <!-- 对话历史 - 可滚动 -->
       <div ref="messagesContainer" class="flex-1 overflow-y-auto p-4">
@@ -148,12 +149,12 @@
           </div>
         </div>
       </div>
+    </div>
 
-      <!-- 状态提示条 -->
-      <div class="p-3">
-        <div class="py-2 px-4 text-center text-white/90">
-          {{ statusText }}
-        </div>
+    <!-- 状态提示条 - 始终显示 -->
+    <div class="absolute bottom-[90px] left-16 right-16 z-15">
+      <div class="py-2 px-4 text-center text-white/90 bg-black/20 rounded-xl backdrop-blur-sm">
+        {{ statusText }}
       </div>
     </div>
 
@@ -216,7 +217,7 @@ import { useAudioCapture } from '@/composables/use-audio-capture';
 import { useCameraCapture } from '@/composables/use-camera-capture';
 import { ConversationMessage, ServerMessage } from '@seeworldweb/shared/src/types';
 import { DEFAULT_SUBTITLE_ENABLED } from '@seeworldweb/shared/src/constants';
-import { Mic, MicOff, Video, VideoOff, LogOut, Subtitles, History, Trash2 } from 'lucide-vue-next';
+import { Mic, MicOff, Video, VideoOff, LogOut, Captions, CaptionsOff, History, Trash2 } from 'lucide-vue-next';
 import * as ConversationApi from '@/api/conversations';
 import type { ConversationItem } from '@/api/conversations';
 import CameraPreview from './CameraPreview.vue';
@@ -228,6 +229,7 @@ const token = authStore.token;
 const isSubtitleEnabled = ref(DEFAULT_SUBTITLE_ENABLED);
 const conversationMessages = ref<ConversationMessage[]>([]);
 const currentModelMessage = ref('');
+const isThinking = ref(false);
 const isPlayingAudio = ref(false);
 const userInputText = ref('');
 const messagesContainer = ref<HTMLDivElement | null>(null);
@@ -327,13 +329,10 @@ const switchConversation = async (conversationId: string) => {
 // Create new conversation
 const createNewConversation = async () => {
   try {
-    // Only clear if we don't already have messages (user might have started talking already)
-    // If messages already exist (user started talking during initialization), keep them
+    // User explicitly clicked "new conversation" - always clear to start fresh
     currentConversationId.value = null;
-    if (conversationMessages.value.length === 0) {
-      conversationMessages.value = [];
-      currentModelMessage.value = '';
-    }
+    conversationMessages.value = [];
+    currentModelMessage.value = '';
 
     // Create empty conversation, title will be generated automatically
     // when user sends the first message on the backend
@@ -341,25 +340,6 @@ const createNewConversation = async () => {
     currentConversationId.value = response.id;
     historyDropdownOpen.value = false;
     await loadConversationList();
-
-    // If we already have user messages from early interaction before conversation was created,
-    // save them to the backend now that we have a conversationId
-    if (currentConversationId.value && conversationMessages.value.length > 0) {
-      for (const msg of conversationMessages.value) {
-        if (msg.role === 'user') {
-          ConversationApi.addMessage(currentConversationId.value, 'user', msg.text)
-            .catch(err => {
-              console.error('Failed to save existing user message:', err);
-            });
-        } else if (msg.role === 'model') {
-          ConversationApi.addMessage(currentConversationId.value, 'model', msg.text)
-            .catch(err => {
-              console.error('Failed to save existing model message:', err);
-            });
-        }
-      }
-      loadConversationList();
-    }
   } catch (err) {
     console.error('Failed to create new conversation:', err);
     alert('创建新对话失败，请重试');
@@ -428,6 +408,11 @@ const statusText = computed(() => {
     return '未连接';
   }
 
+  // If LLM is processing, show thinking
+  if (isThinking.value) {
+    return '思考中';
+  }
+
   if (conversationMessages.value.length === 0 && !isAudioEnabled.value) {
     return '问问我';
   }
@@ -437,7 +422,7 @@ const statusText = computed(() => {
     return '正在听';
   }
 
-  // If currentModelMessage is being built, we're thinking/generating
+  // If currentModelMessage is being built, we're generating
   if (currentModelMessage.value && conversationMessages.value.length > 0 &&
       conversationMessages.value[conversationMessages.value.length - 1].role === 'model') {
     if (currentModelMessage.value !== conversationMessages.value[conversationMessages.value.length - 1].text) {
@@ -538,8 +523,10 @@ function handleServerMessage(message: ServerMessage) {
       }
       const userMessageId = Date.now().toString() + '-user';
       // Check if this is already in the list from ongoing updates
+      // Ongoing updates use numeric message IDs (segment timestamps)
+      // All user messages that came from ongoing streaming are still at the end
       const existingIndexFinal = conversationMessages.value.findIndex(
-        m => m.id.startsWith('message-') || m.id === userMessageId
+        m => !isNaN(Number(m.id)) || m.id.startsWith('message-') || m.id === userMessageId
       );
       if (existingIndexFinal >= 0) {
         // Update existing bubble from streaming
@@ -568,6 +555,7 @@ function handleServerMessage(message: ServerMessage) {
 
     case 'model_start':
       currentModelMessage.value = '';
+      isThinking.value = true;
       break;
 
     case 'model_token':
@@ -593,8 +581,12 @@ function handleServerMessage(message: ServerMessage) {
       }
       playAudio(message.data);
       isPlayingAudio.value = true;
+      break;
 
+    case 'model_end':
+      isThinking.value = false;
       // Save model message to backend after it's complete
+      // Always save regardless of whether TTS was generated
       if (currentConversationId.value && conversationMessages.value.length > 0) {
         const lastMessage = conversationMessages.value[conversationMessages.value.length - 1];
         if (lastMessage.role === 'model' && lastMessage.text === currentModelMessage.value) {

@@ -1,5 +1,6 @@
 """Conversation history API endpoints."""
 
+import logging
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -34,6 +35,8 @@ from vector_store.chroma_client import (
 )
 from services.embedding import get_embedding_service
 from utils.jwt import verify_jwt_token
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 security = HTTPBearer(auto_error=False)
@@ -239,7 +242,9 @@ def delete_conversation(
     """
     conv = get_conversation(conversation_id)
     if conv is None:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+        # Conversation already deleted - still return success to frontend
+        logger.info("Conversation already deleted, returning success", extra={"conversation_id": str(conversation_id)})
+        return DeleteConversationResponse(success=True)
 
     if conv.user_id != user_id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this conversation")
@@ -248,7 +253,15 @@ def delete_conversation(
     success = delete_conversation_and_messages(conversation_id)
 
     if success:
-        # Delete from vector store
-        delete_conversation_vectors(str(conversation_id))
+        # Delete from vector store - ignore errors, conversation already deleted from CSV
+        try:
+            delete_conversation_vectors(str(conversation_id))
+        except Exception as e:
+            # If vector deletion fails, it's okay - conversation is already gone from main storage
+            # Log the error but don't fail the whole request
+            logger.warning(
+                "Failed to delete conversation vectors from ChromaDB, conversation already deleted from main storage",
+                extra={"conversation_id": str(conversation_id), "error": str(e)}
+            )
 
     return DeleteConversationResponse(success=success)

@@ -1,7 +1,7 @@
 // UI Default States
 export const DEFAULT_AUDIO_ENABLED = false;
 export const DEFAULT_CAMERA_ENABLED = false;
-export const DEFAULT_SUBTITLE_ENABLED = false;
+export const DEFAULT_SUBTITLE_ENABLED = true;
 
 // Camera Capture Settings
 export const CAMERA_FRAME_INTERVAL_MS = 1000; // Send one frame per second

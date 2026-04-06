@@ -27,3 +27,6 @@ SeeWorldWeb - Full-stack web application.
 - Shared TypeScript types are in `frontend/shared/`
 - Backend uses Pydantic models for type safety
 - Environment variables: `.env` in backend (not committed), `.env.example` for reference
+
+## log
+/logs/log_full.log
