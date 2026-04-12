@@ -115,13 +115,18 @@ class StreamProcessor:
 
     async def _process_after_asr_stop(self) -> None:
         """ASR 停止后处理，重启 ASR"""
-        async with self._processing_lock:
-            # 运行 LLM 管道
+        try:
+            async with self._processing_lock:
+                # 运行 LLM 管道
+                if self._result_callback:
+                    async for msg in self.run_llm_pipeline():
+                        self._result_callback(msg)
+            # 重启 ASR
+            await self._start_asr_if_enabled()
+        except Exception as e:
+            logger.error("llm_processing_failed", error=str(e), exc_info=True)
             if self._result_callback:
-                async for msg in self.run_llm_pipeline():
-                    self._result_callback(msg)
-        # 重启 ASR
-        await self._start_asr_if_enabled()
+                self._result_callback(ErrorMessage(message=f"LLM 处理失败: {str(e)}"))
 
     def _on_asr_partial_result(self, segment_id: str, full_text: str) -> None:
         """ASR 部分结果回调 - 发送实时更新到前端"""
@@ -177,42 +182,41 @@ class StreamProcessor:
     async def run_llm_pipeline(self) -> AsyncGenerator[ServerMessage, None]:
         """Run LLM pipeline with tool calling support"""
         logger.info("run_llm_pipeline_started")
-        async with self._processing_lock:
-            llm_pipeline = LlmPipeline(
-                conversation_history=self.conversation_history,
-                latest_camera_frame=self.latest_camera_frame,
-                llm_service=self.llm_service,
-                tts_service=self.tts_service
-            )
+        llm_pipeline = LlmPipeline(
+            conversation_history=self.conversation_history,
+            latest_camera_frame=self.latest_camera_frame,
+            llm_service=self.llm_service,
+            tts_service=self.tts_service
+        )
 
-            session_id = str(int(asyncio.get_event_loop().time() * 1000))
-            yield ModelStartMessage(sessionId=session_id)
+        session_id = str(int(asyncio.get_event_loop().time() * 1000))
+        yield ModelStartMessage(sessionId=session_id)
 
-            full_response = ""
-            async for msg in llm_pipeline.run():
-                if isinstance(msg, str):
-                    full_response += msg
-                    yield ModelTokenMessage(token=msg)
-                else:
-                    # already handled in llm_pipeline
-                    pass
+        full_response = ""
+        async for msg in llm_pipeline.run():
+            if isinstance(msg, str):
+                full_response += msg
+                yield ModelTokenMessage(token=msg)
+            else:
+                # already handled in llm_pipeline
+                pass
 
-            # 添加最终回答到对话历史
-            self.conversation_history.add_message(ConversationMessage(
-                id=f"{session_id}-model",
-                role="model",
-                text=full_response,
-                timestamp=int(asyncio.get_event_loop().time() * 1000)
-            ))
+        # 添加最终回答到对话历史
+        self.conversation_history.add_message(ConversationMessage(
+            id=f"{session_id}-model",
+            role="model",
+            text=full_response,
+            timestamp=int(asyncio.get_event_loop().time() * 1000)
+        ))
 
-            # TTS 合成
-            if full_response.strip():
-                tts_result = await self.tts_service.synthesize(full_response)
-                if tts_result.success and tts_result.audio:
-                    base64_audio = base64.b64encode(tts_result.audio).decode('utf-8')
-                    yield ModelAudioMessage(data=base64_audio)
+        # TTS 合成
+        if full_response.strip():
+            tts_result = await self.tts_service.synthesize(full_response)
+            if tts_result.success and tts_result.audio:
+                base64_audio = base64.b64encode(tts_result.audio).decode('utf-8')
+                yield ModelAudioMessage(data=base64_audio)
 
-            yield ModelEndMessage()
+        yield ModelEndMessage()
 
     def get_conversation_history(self) -> list[ConversationMessage]:
         return self.conversation_history.get_messages()

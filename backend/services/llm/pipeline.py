@@ -130,8 +130,12 @@ class LlmPipeline:
                     LLMContentPart(type="image", image=self.latest_camera_frame)
                 ]
 
+            # Convert role: internal 'model' -> 'assistant' for LLM
+            llm_role = conv_msg.role
+            if llm_role == "model":
+                llm_role = "assistant"
             messages.append(LLMMessage(
-                role=conv_msg.role,
+                role=llm_role,
                 content=content
             ))
 

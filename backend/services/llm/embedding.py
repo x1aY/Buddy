@@ -8,17 +8,25 @@ from config import settings
 class EmbeddingService:
     """Embedding generation service that works with OpenAI-compatible APIs.
 
-    Most embedding providers (OpenAI, Anthropic, Doubao, etc.) follow the
+    Most embedding providers (OpenAI, Anthropic, Doubao, VolcEngine, etc.) follow the
     OpenAI embedding API format, so we can use a single implementation.
     """
 
     def __init__(self):
-        # Use OpenAI embedding endpoint format regardless of provider
-        if settings.openai_api_key and settings.openai_api_key != "":
+        # Priority: VolcEngine (if configured) -> OpenAI -> Anthropic
+        if (
+            settings.volcengine_coding_plan_url and
+            settings.volcengine_coding_plan_url != "" and
+            settings.volcengine_coding_plan_auth_token and
+            settings.volcengine_coding_plan_auth_token != ""
+        ):
+            self.api_key = settings.volcengine_coding_plan_auth_token
+            self.base_url = settings.volcengine_coding_plan_url
+        elif settings.openai_api_key and settings.openai_api_key != "":
             self.api_key = settings.openai_api_key
             self.base_url = settings.openai_base_url
         else:
-            # Fall back to Anthropic if OpenAI is not configured
+            # Fall back to Anthropic if no other is configured
             self.api_key = settings.anthropic_auth_token or ""
             self.base_url = settings.anthropic_base_url or "https://api.anthropic.com"
 

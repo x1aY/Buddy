@@ -42,7 +42,7 @@ class VolcengineLLMService(BaseLLMService):
             return
 
         headers = {
-            "x-api-key": self.auth_token,
+            "Authorization": f"Bearer {self.auth_token}",
             "anthropic-version": "2023-06-01",
             "content-type": "application/json"
         }
@@ -75,8 +75,8 @@ class VolcengineLLMService(BaseLLMService):
         if tools:
             data["tools"] = [tool.to_anthropic() for tool in tools]
 
-        # Use base_url directly as complete endpoint URL as configured
-        url = self.base_url.rstrip('/')
+        # Anthropic protocol endpoint for VolcEngine is {base_url}/v1/messages
+        url = f"{self.base_url.rstrip('/')}/v1/messages"
 
         async with httpx.AsyncClient(timeout=120) as client:
             async with client.stream('POST', url, headers=headers, json=data) as response:
@@ -92,6 +92,8 @@ class VolcengineLLMService(BaseLLMService):
         role = msg.role
         if role == "model":
             role = "assistant"  # Anthropic uses assistant, internal uses model for history
+        elif role == "tool":
+            role = "user"  # VolcEngine doesn't support 'tool' role, use 'user' instead
 
         if isinstance(msg.content, str):
             return {
