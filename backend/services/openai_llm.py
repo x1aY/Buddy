@@ -1,11 +1,14 @@
 import httpx
-from typing import List, AsyncGenerator
+import json
+from typing import List, AsyncGenerator, Optional
 from config import settings
 from models.schemas import LLMMessage, LLMContentPart
-from utils import parse_openai_stream
+from utils.openai_stream import parse_openai_stream
+from ..base import BaseLLMService
+from services.tool_calling.tool_definitions import ToolDefinition
 
 
-class OpenAILLMService:
+class OpenAILLMService(BaseLLMService):
     """OpenAI Chat Completions protocol compatible LLM service
 
     Works with:
@@ -23,7 +26,7 @@ class OpenAILLMService:
         """Check if this service is properly configured"""
         return self.api_key is not None and self.api_key != ""
 
-    async def chat_stream(self, messages: List[LLMMessage]) -> AsyncGenerator[str, None]:
+    async def chat_stream(self, messages: List[LLMMessage], tools: Optional[List[ToolDefinition]] = None) -> AsyncGenerator[str, None]:
         """Stream chat completions from OpenAI-compatible API"""
         if not self.is_configured():
             yield "Error: OpenAI API key not configured"
@@ -73,6 +76,9 @@ class OpenAILLMService:
             "stream": True,
             "temperature": 0.7
         }
+
+        if tools:
+            data["tools"] = [tool.to_openai() for tool in tools]
 
         url = f"{self.base_url.rstrip('/')}/chat/completions"
 
