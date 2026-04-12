@@ -33,7 +33,7 @@ from vector_store.chroma_client import (
     add_message as chroma_add_message,
     delete_conversation_vectors,
 )
-from services.embedding import get_embedding_service
+from services.llm.embedding import get_embedding_service
 from utils.jwt import verify_jwt_token
 
 logger = logging.getLogger(__name__)

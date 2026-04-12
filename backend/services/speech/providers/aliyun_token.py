@@ -60,9 +60,9 @@ class AccessToken:
         return None, None
 
 async def getAliToken():
-    app_key = os.getenv('ALIYUN_APP_KEY')
-    access_key_id = os.getenv('ALIYUN_AK_ID')
-    access_key_secret = os.getenv('ALIYUN_AK_SECRET')
+    app_key = os.getenv('ALIYUN_VOICE_APP_KEY')
+    access_key_id = os.getenv('ALIYUN_VOICE_AK_ID')
+    access_key_secret = os.getenv('ALIYUN_VOICE_AK_SECRET')
     token, expire_time = await AccessToken.create_token(access_key_id, access_key_secret)
     tokenBeijingTime = (time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(expire_time))) if expire_time else None
     # logger.info(f'app_key: {app_key}, token: {token}')

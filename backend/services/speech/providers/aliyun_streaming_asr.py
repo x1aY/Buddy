@@ -9,7 +9,7 @@ import websockets
 from typing import Callable, Optional
 from models.schemas import ASRResult
 from utils.logger import get_logger
-from .Aliyun_token import getAliToken
+from .aliyun_token import getAliToken
 
 logger = get_logger("streaming_asr")
 
