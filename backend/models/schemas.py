@@ -159,7 +159,7 @@ class LLMContentPart(BaseModel):
 
 
 class LLMMessage(BaseModel):
-    role: Literal['user', 'assistant', 'system']
+    role: Literal['user', 'assistant', 'system', 'tool']
     content: Union[str, List[LLMContentPart]]
 
 
@@ -180,3 +180,19 @@ class ASRResult(BaseModel):
 class TTSResult(BaseModel):
     audio: bytes
     success: bool
+
+
+# ==================== Tool Calling Types ====================
+
+class ToolCall(BaseModel):
+    """LLM 工具调用"""
+    id: str
+    name: str
+    parameters: dict  # JSON 参数
+
+
+class ToolResult(BaseModel):
+    """工具执行结果"""
+    tool_call_id: str
+    content: str
+    success: bool = True

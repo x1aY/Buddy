@@ -45,6 +45,16 @@ class Settings(BaseSettings):
     openai_api_key: Optional[str] = None
     openai_model: str = "gpt-4o"
 
+    # VolcEngine Coding Plan (Anthropic Protocol)
+    volcengine_coding_plan_url: Optional[str] = None
+    volcengine_coding_plan_auth_token: Optional[str] = None
+    volcengine_coding_plan_model: str = "ep-xxxxxx-coding-plan-xxxxxx"
+
+    # Open-WebSearch MCP Daemon
+    open_websearch_enabled: bool = False
+    open_websearch_base_url: str = "http://localhost:3000"
+    open_websearch_timeout: int = 30
+
     class Config:
         env_file = ".env"
 
