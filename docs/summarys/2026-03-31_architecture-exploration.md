@@ -2,7 +2,7 @@
 
 ## 探索任务完成情况
 
-成功完成了对 SeeWorldWeb 项目的全面架构探索，并生成了完整的架构文档：
+成功完成了对 Buddy 项目的全面架构探索，并生成了完整的架构文档：
 
 **文档位置**: [`docs/architecture/architecture.md`](../architecture/architecture.md)
 

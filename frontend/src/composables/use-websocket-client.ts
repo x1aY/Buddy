@@ -1,6 +1,6 @@
 import { ref, onUnmounted } from 'vue';
-import { ClientMessage, ServerMessage } from '@seeworldweb/shared/src/types';
-import { WEBSOCKET_RECONNECT_DELAY_MS, WEBSOCKET_PING_INTERVAL_MS } from '@seeworldweb/shared/src/constants';
+import { ClientMessage, ServerMessage } from '@buddy/shared/src/types';
+import { WEBSOCKET_RECONNECT_DELAY_MS, WEBSOCKET_PING_INTERVAL_MS } from '@buddy/shared/src/constants';
 
 export function useWebSocketClient(token: string | null) {
   const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws';

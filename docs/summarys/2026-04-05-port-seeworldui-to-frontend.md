@@ -1,29 +1,29 @@
 # Port SeeWorldUI to frontend - 完成总结
 
 ## 任务目标
-将 `SeeWorldWebUI/` (React + Tailwind CSS) 的全新 UI 设计完整移植到现有的 `frontend/` Vue 3 项目中，将整个 frontend 的 CSS 实现全替换为 Tailwind CSS，保持与 SeeWorldWebUI 设计一致，同时保留所有原有业务逻辑。
+将 `BuddyUI/` (React + Tailwind CSS) 的全新 UI 设计完整移植到现有的 `frontend/` Vue 3 项目中，将整个 frontend 的 CSS 实现全替换为 Tailwind CSS，保持与 BuddyUI 设计一致，同时保留所有原有业务逻辑。
 
 ## 完成内容
 
 ### 1. 安装配置 Tailwind CSS
 - 添加依赖：`tailwindcss@3.4.1`, `postcss`, `autoprefixer`
-- 创建 [`tailwind.config.js`](/Users/x1ay/Documents/AIcode/SeeWorldWeb/frontend/tailwind.config.js)
-- 创建 [`postcss.config.js`](/Users/x1ay/Documents/AIcode/SeeWorldWeb/frontend/postcss.config.js)
-- 更新 [`src/styles/main.css`](/Users/x1ay/Documents/AIcode/SeeWorldWeb/frontend/src/styles/main.css) 添加 Tailwind 基础指令
+- 创建 [`tailwind.config.js`](/Users/x1ay/Documents/AIcode/Buddy/frontend/tailwind.config.js)
+- 创建 [`postcss.config.js`](/Users/x1ay/Documents/AIcode/Buddy/frontend/postcss.config.js)
+- 更新 [`src/styles/main.css`](/Users/x1ay/Documents/AIcode/Buddy/frontend/src/styles/main.css) 添加 Tailwind 基础指令
 
 ### 2. 新增组件
-- [`src/components/AIOrb.vue`](/Users/x1ay/Documents/AIcode/SeeWorldWeb/frontend/src/components/AIOrb.vue) - AI 动态球体组件，从 React 移植到 Vue
+- [`src/components/AIOrb.vue`](/Users/x1ay/Documents/AIcode/Buddy/frontend/src/components/AIOrb.vue) - AI 动态球体组件，从 React 移植到 Vue
   - 支持三种状态：`listening` (聆听脉动), `thinking` (旋转环+粒子), `speaking` (扩散波纹)
   - 使用 SVG 渐变和 CSS keyframes 动画
 
 ### 3. 完全重写页面组件
-- [`LoginPage.vue`](/Users/x1ay/Documents/AIcode/SeeWorldWeb/frontend/src/components/LoginPage.vue) - 全新设计登录页
+- [`LoginPage.vue`](/Users/x1ay/Documents/AIcode/Buddy/frontend/src/components/LoginPage.vue) - 全新设计登录页
   - 保留原有华为/微信/游客登录 OAuth 逻辑
   - 深色渐变背景 + 两个动态光晕圆
   -  staggered 渐入动画效果（标题、按钮依次入场）
   - 毛玻璃玻璃效果登录按钮
 
-- [`VideoCallPage.vue`](/Users/x1ay/Documents/AIcode/SeeWorldWeb/frontend/src/components/VideoCallPage.vue) - 全新视频通话主页
+- [`VideoCallPage.vue`](/Users/x1ay/Documents/AIcode/Buddy/frontend/src/components/VideoCallPage.vue) - 全新视频通话主页
   - **完整保留所有原有业务逻辑**：WebSocket 连接、音频采集、摄像头采集、消息处理、TTS 播放
   - 状态映射：麦克风开启 → `listening`, LLM 生成中 → `thinking`, TTS 播放中 → `speaking`
   - 布局：深色渐变背景 + 装饰光效 + 摄像头全屏背景层 + 右上角字幕开关 + 中央 AIOrb/对话列表 + 底部控制栏
@@ -63,7 +63,7 @@
 
 ## 最终状态
 - **开发服务器**运行在 `http://localhost:5173`
-- **所有 UI** 已经与 `http://localhost:5174` 的 SeeWorldWebUI 完全一致
+- **所有 UI** 已经与 `http://localhost:5174` 的 BuddyUI 完全一致
 - **所有业务逻辑**完整保留，没有修改
 
 完成时间：2026-04-05

@@ -23,7 +23,7 @@
         <h1
           class="text-5xl font-bold text-white mb-4 tracking-tight animate-title-in"
         >
-          SeeWorld AI
+          Buddy AI
         </h1>
         <p
           class="text-gray-400 text-lg animate-subtitle-in"
@@ -73,7 +73,7 @@
 import { onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
-import { UserInfo } from '@seeworldweb/shared/src/types';
+import { UserInfo } from '@buddy/shared/src/types';
 import { Sparkles, Smartphone, MessageSquare, Eye } from 'lucide-vue-next';
 
 const router = useRouter();

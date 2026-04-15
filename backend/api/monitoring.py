@@ -23,6 +23,6 @@ async def health_check():
     """
     return HealthResponse(
         status="ok",
-        service="SeeWorldWeb",
+        service="Buddy",
         version=__version__
     )

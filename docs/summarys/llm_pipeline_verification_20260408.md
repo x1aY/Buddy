@@ -27,9 +27,9 @@ All previously identified issues have been fixed, and the implementation now ful
 ✅ All 81 total backend tests pass successfully
 
 ## Files Verified
-- `/Users/x1ay/Documents/AIcode/SeeWorldWeb/backend/services/llm_pipeline.py`
-- `/Users/x1ay/Documents/AIcode/SeeWorldWeb/backend/services/tool_calling/tool_executor.py`
-- `/Users/x1ay/Documents/AIcode/SeeWorldWeb/backend/services/anthropic_llm.py`
-- `/Users/x1ay/Documents/AIcode/SeeWorldWeb/backend/services/openai_llm.py`
-- `/Users/x1ay/Documents/AIcode/SeeWorldWeb/backend/utils/openai_stream.py`
-- `/Users/x1ay/Documents/AIcode/SeeWorldWeb/backend/tests/test_llm_pipeline.py`
+- `/Users/x1ay/Documents/AIcode/Buddy/backend/services/llm_pipeline.py`
+- `/Users/x1ay/Documents/AIcode/Buddy/backend/services/tool_calling/tool_executor.py`
+- `/Users/x1ay/Documents/AIcode/Buddy/backend/services/anthropic_llm.py`
+- `/Users/x1ay/Documents/AIcode/Buddy/backend/services/openai_llm.py`
+- `/Users/x1ay/Documents/AIcode/Buddy/backend/utils/openai_stream.py`
+- `/Users/x1ay/Documents/AIcode/Buddy/backend/tests/test_llm_pipeline.py`

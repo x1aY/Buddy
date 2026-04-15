@@ -18,7 +18,7 @@
 ## Task 1: Add backend API endpoint to set conversation as active
 
 **Files:**
-- Modify: `/Users/x1ay/Documents/AIcode/SeeWorldWeb/backend/api/conversations.py`
+- Modify: `/Users/x1ay/Documents/AIcode/Buddy/backend/api/conversations.py`
 
 - [ ] **Step 1: Add the new endpoint to conversations API**
 
@@ -58,7 +58,7 @@ def set_conversation_active(
 - [ ] **Step 3: Commit the backend changes**
 
 ```bash
-git add /Users/x1ay/Documents/AIcode/SeeWorldWeb/backend/api/conversations.py
+git add /Users/x1ay/Documents/AIcode/Buddy/backend/api/conversations.py
 git commit -m "feat: add endpoint to set conversation as active"
 ```
 
@@ -67,7 +67,7 @@ git commit -m "feat: add endpoint to set conversation as active"
 ## Task 2: Update frontend API client to call the new endpoint
 
 **Files:**
-- Modify: `/Users/x1ay/Documents/AIcode/SeeWorldWeb/frontend/src/api/conversations.ts`
+- Modify: `/Users/x1ay/Documents/AIcode/Buddy/frontend/src/api/conversations.ts`
 
 - [ ] **Step 1: Add the new API method**
 
@@ -90,7 +90,7 @@ export async function setConversationActive(conversationId: string): Promise<Suc
 - [ ] **Step 2: Commit the frontend API changes**
 
 ```bash
-git add /Users/x1ay/Documents/AIcode/SeeWorldWeb/frontend/src/api/conversations.ts
+git add /Users/x1ay/Documents/AIcode/Buddy/frontend/src/api/conversations.ts
 git commit -m "feat: add API method to set conversation as active"
 ```
 
@@ -99,7 +99,7 @@ git commit -m "feat: add API method to set conversation as active"
 ## Task 3: Update VideoCallPage.vue to use the new endpoint
 
 **Files:**
-- Modify: `/Users/x1ay/Documents/AIcode/SeeWorldWeb/frontend/src/components/VideoCallPage.vue`
+- Modify: `/Users/x1ay/Documents/AIcode/Buddy/frontend/src/components/VideoCallPage.vue`
 
 - [ ] **Step 1: Import the new API method**
 
@@ -143,7 +143,7 @@ const switchConversation = async (conversationId: string) => {
 - [ ] **Step 3: Commit the frontend changes**
 
 ```bash
-git add /Users/x1ay/Documents/AIcode/SeeWorldWeb/frontend/src/components/VideoCallPage.vue
+git add /Users/x1ay/Documents/AIcode/Buddy/frontend/src/components/VideoCallPage.vue
 git commit -m "fix: persist active conversation when switching conversations"
 ```
 
@@ -152,7 +152,7 @@ git commit -m "fix: persist active conversation when switching conversations"
 ## Task 4: Test the fix
 
 **Files:**
-- Test: `/Users/x1ay/Documents/AIcode/SeeWorldWeb/frontend/src/components/VideoCallPage.vue`
+- Test: `/Users/x1ay/Documents/AIcode/Buddy/frontend/src/components/VideoCallPage.vue`
 
 - [ ] **Step 1: Test the fix by following these steps**
   1. Run both frontend and backend servers

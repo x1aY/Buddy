@@ -3,7 +3,7 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Overview
-SeeWorldWeb - Full-stack web application.
+Buddy - Full-stack web application.
 
 ## Commands
 - **Install frontend dependencies**: `cd frontend && npm install`

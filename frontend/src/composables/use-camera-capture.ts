@@ -1,10 +1,10 @@
 import { ref, onUnmounted } from 'vue';
-import { DEFAULT_CAMERA_ENABLED } from '@seeworldweb/shared/src/constants';
+import { DEFAULT_CAMERA_ENABLED } from '@buddy/shared/src/constants';
 import {
   CAMERA_FRAME_INTERVAL_MS,
   CAMERA_FRAME_QUALITY,
   CAMERA_FRAME_MAX_WIDTH
-} from '@seeworldweb/shared/src/constants';
+} from '@buddy/shared/src/constants';
 import { extractBase64FromDataUrl } from '@/utils/image';
 
 export function useCameraCapture(sendFrame: (base64Image: string) => void) {

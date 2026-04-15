@@ -1,5 +1,5 @@
 {
-  "name": "@seeworldweb/frontend",
+  "name": "@buddy/frontend",
   "version": "1.0.0",
   "type": "module",
   "scripts": {
@@ -10,7 +10,7 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@seeworldweb/shared": "file:./shared",
+    "@buddy/shared": "file:./shared",
     "lucide-vue-next": "^1.0.0",
     "pinia": "^2.1.7",
     "vue": "^3.4.19",

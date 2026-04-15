@@ -65,7 +65,7 @@
 ============================= test session starts ==============================
 platform darwin -- Python 3.13.12, pytest-9.0.2, pluggy-1.6.0 -- /opt/homebrew/Caskroom/miniforge/base/bin/python
 cachedir: .pytest_cache
-rootdir: /Users/x1ay/Documents/AIcode/SeeWorldWeb/backend
+rootdir: /Users/x1ay/Documents/AIcode/Buddy/backend
 plugins: asyncio-1.3.0, anyio-4.13.0
 asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
 collecting ... collected 6 items

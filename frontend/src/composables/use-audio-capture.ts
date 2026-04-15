@@ -1,5 +1,5 @@
 import { ref, onUnmounted } from 'vue';
-import { DEFAULT_AUDIO_ENABLED } from '@seeworldweb/shared/src/constants';
+import { DEFAULT_AUDIO_ENABLED } from '@buddy/shared/src/constants';
 
 const BUFFER_SIZE = 2048;
 const TARGET_SAMPLE_RATE = 16000;

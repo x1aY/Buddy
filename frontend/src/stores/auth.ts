@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { UserInfo } from '@seeworldweb/shared/src/types';
+import { UserInfo } from '@buddy/shared/src/types';
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 

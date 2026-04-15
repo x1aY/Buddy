@@ -29,7 +29,7 @@
 </template>
 
 <script setup lang="ts">
-import { ConversationMessage } from '@seeworldweb/shared/src/types';
+import { ConversationMessage } from '@buddy/shared/src/types';
 
 interface Props {
   messages: ConversationMessage[];

@@ -17,5 +17,5 @@ Ciallo～(∠・ω< )⌒★!
 ✅ SPECS COMPLIANT - All required changes are already implemented in the codebase.
 
 ### Files Checked:
-- `/Users/x1ay/Documents/AIcode/SeeWorldWeb/backend/config.py`
-- `/Users/x1ay/Documents/AIcode/SeeWorldWeb/backend/.env.example`
+- `/Users/x1ay/Documents/AIcode/Buddy/backend/config.py`
+- `/Users/x1ay/Documents/AIcode/Buddy/backend/.env.example`

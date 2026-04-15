@@ -13,7 +13,7 @@ from api.websocket import websocket_endpoint
 setup_logging()
 logger = get_logger(__name__)
 
-app = FastAPI(title="SeeWorldWeb Backend", version=__version__)
+app = FastAPI(title="Buddy Backend", version=__version__)
 
 # CORS configuration
 origins = settings.cors_allow_origins.split(",")
@@ -42,7 +42,7 @@ logger.info("Application started", routes=["/", "/health", "/metrics", "/auth/*"
 @app.get("/")
 async def root():
     logger.debug("Root endpoint called")
-    return {"status": "ok", "service": "SeeWorldWeb", "version": __version__}
+    return {"status": "ok", "service": "Buddy", "version": __version__}
 
 
 if __name__ == "__main__":
