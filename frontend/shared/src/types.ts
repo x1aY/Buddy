@@ -8,6 +8,7 @@ export type ClientMessage =
   | { type: 'toggle_camera'; enabled: boolean }
   | { type: 'toggle_subtitle'; enabled: boolean }
   | { type: 'user_transcript'; text: string } // text input from user
+  | { type: 'set_conversation'; conversation_id: string } // set current active conversation
   | { type: 'ping' };
 
 // Server -> Client messages
@@ -20,6 +21,7 @@ export type ServerMessage =
   | { type: 'model_token'; token: string } // Streaming token from model
   | { type: 'model_audio'; data: string } // base64 encoded TTS audio
   | { type: 'model_end' } // Model finished responding
+  | { type: 'conversation_title_updated'; title: string } // Conversation title updated
   | { type: 'pong' }
   | { type: 'error'; message: string };
 

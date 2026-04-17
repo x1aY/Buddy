@@ -12,6 +12,7 @@
   "dependencies": {
     "@buddy/shared": "file:./shared",
     "lucide-vue-next": "^1.0.0",
+    "marked": "^18.0.1",
     "pinia": "^2.1.7",
     "vue": "^3.4.19",
     "vue-router": "^4.3.0"

@@ -4,7 +4,8 @@ Stream Processor - WebSocket 连接主协调器
 """
 import base64
 import asyncio
-from typing import Optional, AsyncGenerator
+from uuid import UUID
+from typing import Optional, AsyncGenerator, List
 from models.schemas import (
     ClientMessage,
     ServerMessage,
@@ -17,6 +18,8 @@ from models.schemas import (
     ModelEndMessage,
     PongMessage,
     ErrorMessage,
+    LLMMessage,
+    ConversationTitleUpdatedMessage,
 )
 from services.llm import (
     BaseLLMService,
@@ -29,9 +32,14 @@ from services.speech import (
     get_tts_service,
     AsrStreamProcessor,
 )
+from storage.conversation_storage import update_conversation_title
 from utils.logger import get_logger
 
 logger = get_logger("stream_processor")
+
+# Configuration constants for auto-title generation
+MAX_TITLE_LENGTH = 10
+MAX_MESSAGES_FOR_SUMMARY = 4
 
 # Singleton service instances - stateless, can be reused across connections
 _tts_service: BaseTTSService = get_tts_service()
@@ -52,6 +60,7 @@ class StreamProcessor:
         self.audio_enabled: bool = True
         self.camera_enabled: bool = True
         self.subtitle_enabled: bool = True
+        self.current_conversation_id: Optional[str] = None
         self._processing_lock = asyncio.Lock()
         self._result_callback: Optional[callable] = None
 
@@ -162,6 +171,10 @@ class StreamProcessor:
         """Set callback to send ServerMessage to websocket"""
         self._result_callback = callback
 
+    def set_current_conversation_id(self, conversation_id: str) -> None:
+        """Set current active conversation ID for auto-title generation"""
+        self.current_conversation_id = conversation_id
+
     async def process_final_transcript(self, text: str) -> AsyncGenerator[ServerMessage, None]:
         """Process direct user text input (from text box)"""
         if not text.strip():
@@ -218,5 +231,75 @@ class StreamProcessor:
 
         yield ModelEndMessage()
 
+        # Auto-generate/update conversation title after model finishes
+        # Only if we have a conversation ID and at least one user + one model message
+        if (
+            self.current_conversation_id
+            and len(self.conversation_history.get_messages()) >= 2
+        ):
+            # Run title generation asynchronously (don't block streaming)
+            asyncio.create_task(self._generate_and_update_title())
+
     def get_conversation_history(self) -> list[ConversationMessage]:
         return self.conversation_history.get_messages()
+
+    async def _generate_and_update_title(self) -> None:
+        """Generate a conversation title (max 10 Chinese characters) and update it"""
+        try:
+            messages = self.conversation_history.get_messages()
+
+            # Build conversation content for summarization
+            conversation_text = ""
+            for msg in messages[-MAX_MESSAGES_FOR_SUMMARY:]:
+                role = "用户" if msg.role == "user" else "AI"
+                conversation_text += f"{role}: {msg.text}\n"
+
+            # Build prompt for title generation
+            prompt = f"""请用不超过{MAX_TITLE_LENGTH}个汉字总结这个对话的主题。只输出标题，不需要其他解释，不要超过{MAX_TITLE_LENGTH}个字。
+
+对话内容：
+{conversation_text}
+
+标题："""
+
+            # Call LLM to generate title - use chat_stream and collect all tokens
+            llm_messages: List[LLMMessage] = [
+                LLMMessage(
+                    role="system",
+                    content="你是一个对话总结助手，擅长用简洁的语言总结对话主题。"
+                ),
+                LLMMessage(
+                    role="user",
+                    content=prompt
+                )
+            ]
+
+            # Full completion for title - collect all tokens from stream
+            title = ""
+            async for token in self.llm_service.chat_stream(llm_messages):
+                title += token
+
+            # Clean up title - remove extra whitespace, newlines, quotes
+            title = title.strip().strip('"').strip("'").strip()
+
+            # Truncate to max MAX_TITLE_LENGTH characters (Chinese characters count as 1)
+            if len(title) > MAX_TITLE_LENGTH:
+                title = title[:MAX_TITLE_LENGTH]
+
+            if not title:
+                # Fallback: use first few characters of last user message
+                last_user_msg = next((m for m in reversed(messages) if m.role == "user"), None)
+                if last_user_msg:
+                    title = last_user_msg.text[:MAX_TITLE_LENGTH]
+
+            # Update title in storage
+            if title:
+                update_conversation_title(UUID(self.current_conversation_id), title)
+                logger.info("conversation_title_updated", title=title, conversation_id=self.current_conversation_id)
+                # Notify frontend that title has been updated
+                if self._result_callback:
+                    self._result_callback(ConversationTitleUpdatedMessage(title=title))
+
+        except Exception as e:
+            # Title generation should not fail the main conversation flow
+            logger.error("title_generation_failed", error=str(e), exc_info=True)

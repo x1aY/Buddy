@@ -52,7 +52,7 @@ class LlmPipeline:
 
     async def run(self) -> AsyncGenerator[str, None]:
         """Run the LLM pipeline with tool calling loop"""
-        max_iterations = 5
+        max_iterations = 10
         current_iteration = 0
 
         # Working list of messages that includes tool calls and results

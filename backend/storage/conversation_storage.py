@@ -123,9 +123,26 @@ def list_conversations_for_user(user_id: str) -> List[Conversation]:
     """
     storage = _get_conversation_storage()
     convs = storage.filter(lambda conv: conv.user_id == user_id)
+
+    # Filter out empty conversations: no title and no messages
+    # Only keep conversations that have at least one message
+    filtered_convs: List[Conversation] = []
+    msg_storage = _get_message_storage()
+    all_messages = msg_storage.load_all()
+
+    # Count messages per conversation - single pass O(n) instead of O(n*m)
+    message_counts: dict[UUID, int] = {}
+    for msg in all_messages:
+        message_counts[msg.conversation_id] = message_counts.get(msg.conversation_id, 0) + 1
+
+    for conv in convs:
+        count = message_counts.get(conv.id, 0)
+        if count > 0 or (conv.title and conv.title.strip()):
+            filtered_convs.append(conv)
+
     # Sort by updated_at descending
-    convs.sort(key=lambda c: c.updated_at, reverse=True)
-    return convs
+    filtered_convs.sort(key=lambda c: c.updated_at, reverse=True)
+    return filtered_convs
 
 
 def get_conversation(conversation_id: UUID) -> Optional[Conversation]:

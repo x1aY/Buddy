@@ -15,6 +15,7 @@ from models.schemas import (
     ToggleCameraMessage,
     ToggleSubtitleMessage,
     UserTranscriptClientMessage,
+    SetConversationMessage,
     PingMessage
 )
 from services import StreamProcessor
@@ -166,6 +167,10 @@ async def websocket_endpoint(
                 if msg.text.strip():
                     async for response in processor.process_final_transcript(msg.text):
                         await send_message(websocket, response)
+
+            elif msg_type == "set_conversation":
+                msg = SetConversationMessage(**msg_dict)
+                processor.set_current_conversation_id(msg.conversation_id)
 
             else:
                 await send_message(websocket, ErrorMessage(message=f"Unknown message type: {msg_type}"))

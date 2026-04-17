@@ -66,6 +66,11 @@ class UserTranscriptClientMessage(BaseModel):
     text: str
 
 
+class SetConversationMessage(BaseModel):
+    type: Literal['set_conversation'] = 'set_conversation'
+    conversation_id: str
+
+
 ClientMessage = Union[
     AudioChunkMessage,
     CameraFrameMessage,
@@ -73,6 +78,7 @@ ClientMessage = Union[
     ToggleCameraMessage,
     ToggleSubtitleMessage,
     UserTranscriptClientMessage,
+    SetConversationMessage,
     PingMessage
 ]
 
@@ -122,6 +128,11 @@ class PongMessage(BaseModel):
     type: Literal['pong'] = 'pong'
 
 
+class ConversationTitleUpdatedMessage(BaseModel):
+    type: Literal['conversation_title_updated'] = 'conversation_title_updated'
+    title: str
+
+
 class ErrorMessage(BaseModel):
     type: Literal['error'] = 'error'
     message: str
@@ -136,6 +147,7 @@ ServerMessage = Union[
     ModelTokenMessage,
     ModelAudioMessage,
     ModelEndMessage,
+    ConversationTitleUpdatedMessage,
     PongMessage,
     ErrorMessage
 ]

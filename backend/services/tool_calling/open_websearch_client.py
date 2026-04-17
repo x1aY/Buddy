@@ -19,8 +19,15 @@ class OpenWebSearchClient:
         self.base_url = settings.open_websearch_base_url.rstrip('/')
         self.timeout = settings.open_websearch_timeout
         # Disable proxy explicitly for localhost connections to avoid 502 errors from system proxies
-        # proxy=None completely disables proxy usage in httpx
-        self.client = httpx.AsyncClient(timeout=self.timeout, proxy=None)
+        # Explicitly disable proxy for all localhost connections
+        self.client = httpx.AsyncClient(
+            timeout=self.timeout,
+            proxy=None,
+            mounts={
+                "http://": httpx.AsyncHTTPTransport(proxy=None),
+                "https://": httpx.AsyncHTTPTransport(proxy=None),
+            }
+        )
 
     def is_configured(self) -> bool:
         """Check if open-websearch is enabled and configured

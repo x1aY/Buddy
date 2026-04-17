@@ -27,6 +27,13 @@
       </button>
     </div>
 
+    <!-- 顶部居中：对话标题 -->
+    <div class="absolute top-4 left-1/2 -translate-x-1/2 z-20 max-w-[calc(100%-220px)] backdrop-blur-md px-4 py-2 bg-white/10 rounded-full h-12 flex items-center justify-center">
+      <div class="text-white/80 text-sm whitespace-nowrap overflow-hidden text-ellipsis">
+        {{ currentConversationTitle || '新对话' }}
+      </div>
+    </div>
+
     <!-- 右上角：历史 + 退出登录 -->
     <div class="absolute top-4 right-4 z-20 flex items-center gap-3">
       <!-- 历史按钮 -->
@@ -143,8 +150,9 @@
                   ? 'bg-blue-500/30 text-white rounded-tl-sm'
                   : 'bg-green-500/30 text-white rounded-tr-sm'
               ]"
+            class="markdown-body"
             >
-              {{ message.text }}
+              <div v-html="parseMarkdown(message.text)" />
             </div>
           </div>
         </div>
@@ -153,8 +161,13 @@
 
     <!-- 状态提示条 - 始终显示 -->
     <div class="absolute bottom-[90px] left-16 right-16 z-15">
-      <div class="py-2 px-4 text-center text-white/90 bg-black/20 rounded-xl backdrop-blur-sm">
+      <div class="py-2 px-4 text-center text-white/90 rounded-xl backdrop-blur-sm flex items-center justify-center gap-2">
         {{ statusText }}
+        <div v-if="isThinking" class="loading-indicator-inline">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
       </div>
     </div>
 
@@ -220,6 +233,7 @@ import { DEFAULT_SUBTITLE_ENABLED } from '@buddy/shared/src/constants';
 import { Mic, MicOff, Video, VideoOff, LogOut, Captions, CaptionsOff, History, Trash2 } from 'lucide-vue-next';
 import * as ConversationApi from '@/api/conversations';
 import type { ConversationItem } from '@/api/conversations';
+import { marked } from 'marked';
 import CameraPreview from './CameraPreview.vue';
 
 const authStore = useAuthStore();
@@ -321,6 +335,12 @@ const switchConversation = async (conversationId: string) => {
     currentConversationId.value = conversationId;
     historyDropdownOpen.value = false;
 
+    // Notify WebSocket backend about current conversation change
+    send({
+      type: 'set_conversation',
+      conversation_id: conversationId
+    });
+
     // Set the conversation as active on the backend so it persists after refresh
     await ConversationApi.setConversationActive(conversationId);
   } catch (err) {
@@ -342,6 +362,13 @@ const createNewConversation = async () => {
     const response = await ConversationApi.createConversation();
     currentConversationId.value = response.id;
     historyDropdownOpen.value = false;
+
+    // Notify WebSocket backend about current conversation change
+    send({
+      type: 'set_conversation',
+      conversation_id: response.id
+    });
+
     await loadConversationList();
   } catch (err) {
     console.error('Failed to create new conversation:', err);
@@ -596,12 +623,19 @@ function handleServerMessage(message: ServerMessage) {
         const lastMessage = conversationMessages.value[conversationMessages.value.length - 1];
         if (lastMessage.role === 'model' && lastMessage.text === currentModelMessage.value) {
           ConversationApi.addMessage(currentConversationId.value, 'model', lastMessage.text)
-            .then(() => {
-              loadConversationList();
-            })
             .catch(err => {
               console.error('Failed to save model message:', err);
             });
+        }
+      }
+      break;
+
+    case 'conversation_title_updated':
+      // Title updated by backend - update in-place for current conversation
+      if (currentConversationId.value && message.title) {
+        const conv = conversationList.value.find(c => c.id === currentConversationId.value);
+        if (conv) {
+          conv.title = message.title;
         }
       }
       break;
@@ -686,6 +720,11 @@ async function sendUserInput() {
   userInputText.value = '';
 }
 
+// Parse markdown to HTML for rendering
+const parseMarkdown = (text: string): string => {
+  return marked.parse(text);
+};
+
 function handleLogout() {
   authStore.logout();
 }
@@ -729,5 +768,133 @@ function handleLogout() {
 .dropdown-leave-to {
   opacity: 0;
   transform: scale(0.95) translateY(-10px);
+}
+
+/* Markdown rendering styles */
+.markdown-body {
+  line-height: 1.6;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.markdown-body h1 {
+  font-size: 1.4em;
+}
+
+.markdown-body h2 {
+  font-size: 1.3em;
+}
+
+.markdown-body h3 {
+  font-size: 1.2em;
+}
+
+.markdown-body h4 {
+  font-size: 1.1em;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 1.5em;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.markdown-body li {
+  margin: 0.25em 0;
+}
+
+.markdown-body p {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.markdown-body strong {
+  font-weight: 600;
+}
+
+.markdown-body em {
+  font-style: italic;
+}
+
+.markdown-body a {
+  color: #60a5fa;
+  text-decoration: underline;
+}
+
+.markdown-body code {
+  background: rgba(255, 255, 255, 0.15);
+  padding: 0.15em 0.4em;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+.markdown-body pre {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 0.75em;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 0.75em 0;
+}
+
+.markdown-body pre code {
+  background: none;
+  padding: 0;
+}
+
+.markdown-body blockquote {
+  border-left: 4px solid rgba(255, 255, 255, 0.4);
+  padding-left: 0.75em;
+  margin: 0.75em 0;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  margin: 1em 0;
+}
+
+/* Inline loading indicator for status bar */
+@keyframes loading-bounce {
+  0%, 80%, 100% {
+    transform: scale(0);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.loading-indicator-inline {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+
+.loading-indicator-inline span {
+  width: 6px;
+  height: 6px;
+  background-color: rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  animation: loading-bounce 1.4s infinite ease-in-out both;
+}
+
+.loading-indicator-inline span:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.loading-indicator-inline span:nth-child(2) {
+  animation-delay: -0.16s;
 }
 </style>
